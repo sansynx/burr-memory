@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { captureSignal, resolvePlaybook, runSearch, setMode } from "../../src/shared/memory.js";
@@ -65,6 +65,21 @@ describe("memory edges", () => {
       const config = JSON.parse(await readFile(join(dir, ".burr", "config.json"), "utf8"));
       expect(Object.keys(config)).toEqual(["mode"]);
       expect(config.mode).toBe("off");
+    });
+  });
+
+  it("setMode preserves future config fields", async () => {
+    await withTempDir(async (dir) => {
+      await setMode(dir, "on");
+      await writeFile(
+        join(dir, ".burr", "config.json"),
+        `${JSON.stringify({ mode: "on", futureOption: true }, null, 2)}\n`,
+      );
+
+      await setMode(dir, "strict");
+
+      const config = JSON.parse(await readFile(join(dir, ".burr", "config.json"), "utf8"));
+      expect(config).toEqual({ mode: "strict", futureOption: true });
     });
   });
 

@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { admitResolution, admitSignal } from "./admission.js";
 import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, TEXT_LIMIT, clip } from "./bounds.js";
@@ -268,8 +268,16 @@ export async function promotePlaybook(
 export async function setMode(root: string, mode: Mode): Promise<void> {
   await ensureStore(root);
   const dest = join(root, ".burr", "config.json");
-  await mkdir(join(root, ".burr"), { recursive: true });
-  await writeFile(dest, `${JSON.stringify({ mode }, null, 2)}\n`);
+  let config: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(await readFile(dest, "utf8")) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      config = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Replace malformed config with the known-safe shape.
+  }
+  await writeInside(root, dest, `${JSON.stringify({ ...config, mode }, null, 2)}\n`);
 }
 
 export async function readMode(root: string): Promise<Mode> {

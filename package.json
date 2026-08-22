@@ -4,6 +4,14 @@
   "description": "Local debugging memory for coding agents. Search before guess. Capture reusable failures. Playbook after verify.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sansynx/burr-memory.git"
+  },
+  "homepage": "https://github.com/sansynx/burr-memory#readme",
+  "bugs": {
+    "url": "https://github.com/sansynx/burr-memory/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
