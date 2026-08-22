@@ -1,0 +1,5 @@
+{
+  "name": "burr",
+  "description": "Local debugging memory. Search before guess. Capture reusable failures. Playbook after verify.",
+  "version": "0.1.0"
+}

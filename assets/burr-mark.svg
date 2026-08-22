@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Burr">
+  <rect width="128" height="128" fill="#0F0F0E"/>
+  <g transform="translate(64 64)">
+    <g fill="#F4EEE7">
+      <path transform="rotate(15)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(105)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(150)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(195)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(240)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(285)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <path transform="rotate(60)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+    </g>
+    <path transform="rotate(330)" fill="#FF5A1F" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+    <circle r="17.5" fill="#F4EEE7"/>
+  </g>
+</svg>
