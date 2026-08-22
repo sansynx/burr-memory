@@ -31,6 +31,10 @@ export async function captureSignal(
     whyKeep: input.whyKeep ? clip(input.whyKeep, TEXT_LIMIT) : undefined,
     rootCause: input.rootCause ? clip(input.rootCause, TEXT_LIMIT) : undefined,
   };
+  if (!bounded.error.trim()) {
+    await appendUsage(root, { verb: "discard", reason: "empty-error" });
+    return { ok: false, reason: "empty-error" };
+  }
   const sig = signature(bounded.error);
   const admission = admitSignal(bounded);
   if (!admission.ok) {
@@ -70,6 +74,10 @@ export async function resolvePlaybook(
     verification: clip(input.verification ?? "", TEXT_LIMIT),
     failedAttempts: boundList(input.failedAttempts, ATTEMPT_COUNT, ATTEMPT_LIMIT),
   };
+  if (!bounded.error.trim() || !bounded.rootCause.trim() || !bounded.fix.trim()) {
+    await appendUsage(root, { verb: "discard", reason: "empty-error" });
+    return { ok: false, reason: "empty-error" };
+  }
   const sig = signature(bounded.error);
   const admission = admitResolution(bounded);
   if (!admission.ok) {

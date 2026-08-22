@@ -44,7 +44,13 @@ async function mergePluginJson(
   try {
     data = JSON.parse(await readFile(dest, "utf8")) as Record<string, unknown>;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      data = {};
+    } else if (error instanceof SyntaxError) {
+      return "skipped";
+    } else {
+      throw error;
+    }
   }
   const list = Array.isArray(data.plugin) ? [...(data.plugin as string[])] : [];
   if (list.includes(plugin)) return "skipped";

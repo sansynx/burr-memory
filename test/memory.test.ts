@@ -11,7 +11,7 @@ describe("memory writes", () => {
       const jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
       const result = await captureSignal(dir, {
-        error: `TypeError: Cannot read properties of undefined (reading 'id') token=${jwt} email=ada@example.com path=/Users/sanat/app`,
+        error: `TypeError: Cannot read properties of undefined (reading 'id') token=${jwt} email=ada@example.com path=/Users/alex/app`,
         command: "npm test",
         exitCode: 1,
         whyKeep: "API response no longer includes id",
@@ -21,7 +21,7 @@ describe("memory writes", () => {
       const written = await readFile(join(dir, result.path), "utf8");
       expect(written).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
       expect(written).not.toContain("ada@example.com");
-      expect(written).not.toContain("/Users/sanat");
+      expect(written).not.toContain("/Users/alex");
       expect(written).toContain("[REDACTED]");
     });
   });

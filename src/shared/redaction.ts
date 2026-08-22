@@ -18,6 +18,10 @@ const PATTERNS: Array<[RegExp, string]> = [
     /\b(api[_-]?key|secret|password|passwd|token|authorization)\s*[:=]\s*['"]?[^'"\s]{4,}/gi,
     "$1=[REDACTED]",
   ],
+  [
+    /\b[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[:=]\s*['"]?[^'"\s]+/g,
+    "[REDACTED]",
+  ],
   [/([?&](?:token|key|secret|password|access_token|api_key|auth)=)[^&\s]+/gi, "$1[REDACTED]"],
   [/\/\/([^/@\s]+):([^@/\s]+)@/g, "//$1:[REDACTED]@"],
   [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]"],
@@ -32,6 +36,7 @@ const PATTERNS: Array<[RegExp, string]> = [
 export function redact(text: string): string {
   let next = String(text ?? "");
   for (const [pattern, replacement] of PATTERNS) {
+    pattern.lastIndex = 0;
     next = next.replace(pattern, replacement);
   }
   return clip(next, TEXT_LIMIT);

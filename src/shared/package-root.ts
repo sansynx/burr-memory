@@ -10,8 +10,17 @@ export function findPackageRoot(
     const pkg = join(dir, "package.json");
     if (existsSync(pkg)) {
       try {
-        const name = JSON.parse(readFileSync(pkg, "utf8")).name;
-        if (name === "burr") return dir;
+        const parsed = JSON.parse(readFileSync(pkg, "utf8")) as {
+          name?: string;
+          bin?: string | Record<string, string>;
+        };
+        const bin = parsed.bin;
+        const hasBurrBin =
+          bin === "dist/cli/index.js" ||
+          (typeof bin === "object" && bin !== null && "burr" in bin);
+        if (hasBurrBin || parsed.name === "burr" || parsed.name === "burr-memory") {
+          return dir;
+        }
       } catch {
         // keep walking
       }

@@ -33,9 +33,9 @@ MIIBOgIBAAJBAK+fakekey
   });
 
   it("replaces home paths on unix and windows", () => {
-    const text = redact("failed at /Users/sanat/.ssh/id_rsa and C:\\Users\\sanat\\secrets.env");
-    expect(text).not.toContain("/Users/sanat");
-    expect(text).not.toMatch(/C:\\Users\\sanat/);
+    const text = redact("failed at /Users/alex/.ssh/id_rsa and C:\\Users\\alex\\secrets.env");
+    expect(text).not.toContain("/Users/alex");
+    expect(text).not.toMatch(/C:\\Users\\alex/);
     expect(text).toMatch(/\[HOME\]/);
   });
 
