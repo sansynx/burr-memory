@@ -5,3 +5,12 @@ coverage/
 *.tgz
 .DS_Store
 .vitest/
+.burr/
+.agents/
+.claude/
+.cursor/
+.pi/
+.windsurf/
+.opencode/command/
+.opencode/opencode.json
+opencode.json

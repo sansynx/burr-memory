@@ -22,16 +22,19 @@
     "assets",
     ".claude-plugin",
     ".codex-plugin",
-    ".opencode",
+    ".opencode/plugins/burr.mjs",
     "pi-extension",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.pi.json",
     "test": "vitest run",
-    "prepack": "tsc"
+    "check": "npm run typecheck && npm test",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check"
   },
   "engines": {
     "node": ">=18"

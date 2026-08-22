@@ -26,12 +26,31 @@ export function assertInside(root: string, target: string): string {
   return resolved;
 }
 
+async function assertNoSymlinkSegments(root: string, target: string): Promise<void> {
+  const resolvedRoot = resolve(root);
+  const rel = relative(resolvedRoot, target);
+  let current = resolvedRoot;
+
+  for (const segment of rel.split(/[\\/]/).filter(Boolean)) {
+    current = resolve(current, segment);
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        throw new BurrFsError(`Refusing write through symlink: ${current}`);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+  }
+}
+
 export async function writeIfMissing(
   root: string,
   target: string,
   data: string,
 ): Promise<"created" | "skipped"> {
   const dest = assertInside(root, target);
+  await assertNoSymlinkSegments(root, dest);
   await mkdir(dirname(dest), { recursive: true });
   try {
     await writeFile(dest, data, { flag: "wx" });
@@ -44,6 +63,7 @@ export async function writeIfMissing(
 
 export async function writeInside(root: string, target: string, data: string): Promise<string> {
   const dest = assertInside(root, joinSafe(root, target));
+  await assertNoSymlinkSegments(root, dest);
   await mkdir(dirname(dest), { recursive: true });
   await writeFile(dest, data);
   return dest;

@@ -28,5 +28,6 @@ describe("cli", () => {
     }
     expect(logs.join("\n")).toContain("burr init");
     expect(logs.join("\n")).toContain("burr search");
+    expect(logs.join("\n")).toContain("burr promote");
   });
 });

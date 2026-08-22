@@ -9,6 +9,25 @@ describe("signature", () => {
     expect(a).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     expect(a.length).toBeLessThanOrEqual(80);
   });
+
+  it("reserves the hash suffix for long signatures", () => {
+    const prefix = [
+      "abcdefghijklmnopqrst",
+      "bcdefghijklmnopqrstu",
+      "cdefghijklmnopqrstuv",
+      "defghijklmnopqrstuvw",
+      "efghijklmnopqrstuvwx",
+      "fghijklmnopqrstuvwxy",
+    ].join(" ");
+    const longError = `${prefix}${" repeated".repeat(2_000)}`;
+    const first = signature(`${longError}\nfirst root cause`);
+    const second = signature(`${longError}\nsecond root cause`);
+
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/-[a-f0-9]{8}$/);
+    expect(second).toMatch(/-[a-f0-9]{8}$/);
+    expect(first.length).toBeLessThanOrEqual(80);
+  });
 });
 
 describe("renderPlaybook", () => {

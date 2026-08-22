@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { UsageEvent, UsageSummary, Verb } from "./types.js";
 
-const VERBS: Verb[] = ["search", "hit", "miss", "capture", "resolve", "discard"];
+const VERBS: Verb[] = ["search", "hit", "miss", "capture", "resolve", "promote", "discard"];
 
 function usagePath(root: string): string {
   return join(root, ".burr", "usage.jsonl");

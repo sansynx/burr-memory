@@ -1,16 +1,17 @@
 import { createHash } from "node:crypto";
-import { redact } from "./redaction.js";
+import { redactUnbounded } from "./redaction.js";
 import { tokenize } from "./tokens.js";
 
 export function signature(error: string): string {
-  const redacted = redact(error);
+  const redacted = redactUnbounded(error);
   const normalized = redacted.toLowerCase().replace(/\s+/g, " ").trim();
   const tokens = tokenize(normalized)
     .filter((token) => token.length >= 3)
     .slice(0, 6);
-  const slug = (tokens.join("-") || "error").replace(/[^a-z0-9-]/g, "");
+  const rawSlug = (tokens.join("-") || "error").replace(/[^a-z0-9-]/g, "");
   const hash = createHash("sha256").update(normalized).digest("hex").slice(0, 8);
-  return `${slug}-${hash}`.slice(0, 80).replace(/-+$/, "");
+  const slug = rawSlug.slice(0, 80 - hash.length - 1).replace(/-+$/, "") || "error";
+  return `${slug}-${hash}`;
 }
 
 export function renderPlaybook(input: {

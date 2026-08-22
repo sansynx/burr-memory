@@ -37,7 +37,7 @@ describe("Pi", () => {
     });
   });
 
-  it("registers the six Pi commands and injects the rule unless mode is off", async () => {
+  it("registers the seven Pi commands and injects the rule unless mode is off", async () => {
     await withTempDir(async (dir) => {
       await runInit(dir);
       const mod = await import(pathToFileURL(join(findPackageRoot(), "pi-extension", "index.ts")).href);

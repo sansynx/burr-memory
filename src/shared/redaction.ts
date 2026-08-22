@@ -33,15 +33,15 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/\b172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}\b/g, "[IP]"],
 ];
 
-export function redact(text: string): string {
+export function redactUnbounded(text: string): string {
   let next = String(text ?? "");
   for (const [pattern, replacement] of PATTERNS) {
     pattern.lastIndex = 0;
     next = next.replace(pattern, replacement);
   }
-  return clip(next, TEXT_LIMIT);
+  return next;
 }
 
-export function redactOptional(text: string | undefined): string | undefined {
-  return text === undefined ? undefined : redact(text);
+export function redact(text: string): string {
+  return clip(redactUnbounded(text), TEXT_LIMIT);
 }

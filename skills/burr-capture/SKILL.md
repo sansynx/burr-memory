@@ -5,9 +5,8 @@ description: Save a reusable failure as a redacted Burr signal. Use when the use
 
 # Burr capture
 
-1. Collect error, stack summary, command, exit code, attempted fixes. Bound sizes (12k text, 20 attempts).
-2. Run admission. Discard ephemeral local junk (missing assets, busy ports, down dev servers, unset env, flaky network) unless a generalizable cause is present.
-3. If discarded, append usage.jsonl verb `discard` with reason. Do not write a memory file.
-4. If retained, redact every field. Write `.burr/memory/signals/<signature-or-slug>.md`.
-5. Append usage.jsonl verb `capture` with path.
-6. Never dump source trees or `.env` contents.
+1. Clip the error, stack, and command to 12k characters.
+2. Run admission. Discard ephemeral junk (busy port, missing local asset, down dev server, unset local env, flaky network).
+3. Redact secrets and private paths.
+4. Write `~/.burr/memory/signals/<signature>.md` so other projects and later sessions can find it. Do not write the signal into another repo.
+5. Append this project's usage.jsonl verb `capture` (or `discard` with reason).

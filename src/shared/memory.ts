@@ -1,9 +1,17 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { admitResolution, admitSignal } from "./admission.js";
 import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, TEXT_LIMIT, clip } from "./bounds.js";
-import { writeInside } from "./fs.js";
-import { appendUsage, summarizeUsage } from "./ledger.js";
+import { ensureStore } from "./ensure-store.js";
+import { assertInside, writeIfMissing, writeInside } from "./fs.js";
+import { userHome } from "./home.js";
+import {
+  ensureUserMemory,
+  userMemoryRel,
+  userPlaybooksDir,
+  userSignalsDir,
+} from "./user-memory.js";
+import { appendUsage, readUsage, summarizeUsage } from "./ledger.js";
 import { renderPlaybook, renderSignal, signature } from "./playbook.js";
 import { redact } from "./redaction.js";
 import { searchMemoryFiles } from "./search.js";
@@ -21,6 +29,7 @@ function titleFrom(error: string, fallback: string): string {
 export async function captureSignal(
   root: string,
   input: CaptureInput,
+  options: { home?: string } = {},
 ): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
   const bounded: CaptureInput = {
     ...input,
@@ -31,6 +40,9 @@ export async function captureSignal(
     whyKeep: input.whyKeep ? clip(input.whyKeep, TEXT_LIMIT) : undefined,
     rootCause: input.rootCause ? clip(input.rootCause, TEXT_LIMIT) : undefined,
   };
+  const home = options.home ?? userHome();
+  await ensureStore(root);
+  await ensureUserMemory(home);
   if (!bounded.error.trim()) {
     await appendUsage(root, { verb: "discard", reason: "empty-error" });
     return { ok: false, reason: "empty-error" };
@@ -39,14 +51,14 @@ export async function captureSignal(
   const admission = admitSignal(bounded);
   if (!admission.ok) {
     await appendUsage(root, { verb: "discard", reason: admission.reason, signature: sig });
-    await mkdir(join(root, ".burr", "memory", "signals"), { recursive: true });
     return { ok: false, reason: admission.reason ?? "discard" };
   }
 
-  const path = join(".burr", "memory", "signals", `${sig}.md`).replaceAll("\\", "/");
+  const filename = `${sig}.md`;
+  const path = userMemoryRel("signals", filename);
   await writeInside(
-    root,
-    path,
+    home,
+    join(".burr", "memory", "signals", filename),
     renderSignal({
       title: redact(titleFrom(bounded.error, "Signal")),
       signature: sig,
@@ -65,6 +77,7 @@ export async function captureSignal(
 export async function resolvePlaybook(
   root: string,
   input: ResolveInput,
+  options: { home?: string } = {},
 ): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
   const bounded: ResolveInput = {
     ...input,
@@ -74,21 +87,25 @@ export async function resolvePlaybook(
     verification: clip(input.verification ?? "", TEXT_LIMIT),
     failedAttempts: boundList(input.failedAttempts, ATTEMPT_COUNT, ATTEMPT_LIMIT),
   };
+  const home = options.home ?? userHome();
+  await ensureStore(root);
+  await ensureUserMemory(home);
   if (!bounded.error.trim() || !bounded.rootCause.trim() || !bounded.fix.trim()) {
     await appendUsage(root, { verb: "discard", reason: "empty-error" });
     return { ok: false, reason: "empty-error" };
   }
-  const sig = signature(bounded.error);
+  const sig = signature(`${bounded.error}\n${bounded.rootCause}`);
   const admission = admitResolution(bounded);
   if (!admission.ok) {
     await appendUsage(root, { verb: "discard", reason: admission.reason, signature: sig });
     return { ok: false, reason: admission.reason ?? "discard" };
   }
 
-  const path = join(".burr", "memory", "playbooks", `${sig}.md`).replaceAll("\\", "/");
+  const filename = `${sig}.md`;
+  const path = userMemoryRel("playbooks", filename);
   await writeInside(
-    root,
-    path,
+    home,
+    join(".burr", "memory", "playbooks", filename),
     renderPlaybook({
       title: redact(titleFrom(bounded.error, "Playbook")),
       signature: sig,
@@ -107,11 +124,13 @@ export async function resolvePlaybook(
 export async function runSearch(
   root: string,
   query: string,
+  options: { home?: string } = {},
 ): Promise<{ hits: SearchHit[] }> {
   const cleaned = redact(clip(query, TEXT_LIMIT));
   const sig = signature(cleaned);
+  await ensureStore(root);
   await appendUsage(root, { verb: "search", signature: sig });
-  const hits = await searchMemoryFiles(root, cleaned);
+  const hits = await searchMemoryFiles(root, cleaned, { home: options.home ?? userHome() });
   if (hits[0]) {
     await appendUsage(root, { verb: "hit", signature: sig, path: hits[0].path.replaceAll("\\", "/") });
   } else {
@@ -120,7 +139,134 @@ export async function runSearch(
   return { hits };
 }
 
+function playbookRel(path: string): string {
+  return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function isProjectPlaybook(rel: string): boolean {
+  return rel.startsWith(".burr/memory/playbooks/") && rel.endsWith(".md") && !rel.includes("..");
+}
+
+async function writePromotedPlaybook(
+  home: string,
+  preferredFilename: string,
+  markdown: string,
+): Promise<string> {
+  const target = (filename: string) => join(home, ".burr", "memory", "playbooks", filename);
+  const write = async (filename: string) => {
+    const result = await writeIfMissing(home, target(filename), markdown);
+    if (result === "created") return true;
+    return (await readFile(target(filename), "utf8")) === markdown;
+  };
+
+  if (await write(preferredFilename)) return preferredFilename;
+
+  const contentHash = signature(markdown).slice(-8);
+  const stem = preferredFilename.replace(/\.md$/i, "").slice(0, 70).replace(/-+$/, "");
+  const collisionFilename = `${stem || "playbook"}-${contentHash}.md`;
+  if (await write(collisionFilename)) return collisionFilename;
+
+  throw new Error(`Unable to promote playbook without overwriting ${collisionFilename}`);
+}
+
+async function newestLegacyPlaybook(root: string): Promise<string | undefined> {
+  const dir = join(root, ".burr", "memory", "playbooks");
+  let names: string[];
+  try {
+    names = (await readdir(dir)).filter((name) => name.endsWith(".md"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+
+  const candidates = await Promise.all(
+    names.map(async (name) => ({
+      name,
+      mtimeMs: (await stat(join(dir, name))).mtimeMs,
+    })),
+  );
+  const newest = candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+  return newest
+    ? join(".burr", "memory", "playbooks", newest.name).replaceAll("\\", "/")
+    : undefined;
+}
+
+async function legacyPlaybookExists(root: string, rel: string): Promise<boolean> {
+  try {
+    return (await stat(assertInside(root, join(root, rel)))).isFile();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+export async function promotePlaybook(
+  root: string,
+  input: { path?: string; home?: string } = {},
+): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
+  const home = input.home ?? userHome();
+  await ensureStore(root);
+
+  let rel = input.path ? playbookRel(input.path) : "";
+  if (!rel) {
+    const last = [...(await readUsage(root))]
+      .reverse()
+      .find(
+        (event) =>
+          event.verb === "resolve" &&
+          event.path &&
+          isProjectPlaybook(playbookRel(event.path)),
+      );
+    const ledgerRel = last?.path ? playbookRel(last.path) : "";
+    rel =
+      ledgerRel && (await legacyPlaybookExists(root, ledgerRel))
+        ? ledgerRel
+        : (await newestLegacyPlaybook(root)) ?? "";
+  }
+  if (!rel || !isProjectPlaybook(rel)) {
+    await appendUsage(root, { verb: "discard", reason: rel ? "not-a-playbook" : "missing-playbook" });
+    return { ok: false, reason: rel ? "not-a-playbook" : "missing-playbook" };
+  }
+
+  let dest: string;
+  try {
+    dest = assertInside(root, join(root, rel));
+  } catch {
+    await appendUsage(root, { verb: "discard", reason: "not-a-playbook" });
+    return { ok: false, reason: "not-a-playbook" };
+  }
+
+  let markdown: string;
+  try {
+    markdown = await readFile(dest, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      await appendUsage(root, { verb: "discard", reason: "missing-playbook" });
+      return { ok: false, reason: "missing-playbook" };
+    }
+    throw error;
+  }
+
+  if (/^kind:\s*signal\s*$/m.test(markdown) || rel.startsWith(".burr/memory/signals/")) {
+    await appendUsage(root, { verb: "discard", reason: "not-a-playbook" });
+    return { ok: false, reason: "not-a-playbook" };
+  }
+
+  const filename = basename(rel);
+  const cleaned = redact(markdown);
+  await ensureUserMemory(home);
+  const promotedFilename = await writePromotedPlaybook(home, filename, cleaned);
+  const path = userMemoryRel("playbooks", promotedFilename);
+  await appendUsage(root, {
+    verb: "promote",
+    path,
+    signature: promotedFilename.replace(/\.md$/, ""),
+  });
+  return { ok: true, path };
+}
+
 export async function setMode(root: string, mode: Mode): Promise<void> {
+  await ensureStore(root);
   const dest = join(root, ".burr", "config.json");
   await mkdir(join(root, ".burr"), { recursive: true });
   await writeFile(dest, `${JSON.stringify({ mode }, null, 2)}\n`);
@@ -156,8 +302,9 @@ export async function status(root: string): Promise<{
   const summary = await summarizeUsage(root);
   return {
     mode: await readMode(root),
-    playbooks: await count(join(root, ".burr", "memory", "playbooks")),
-    signals: await count(join(root, ".burr", "memory", "signals")),
+    playbooks:
+      (await count(userPlaybooksDir())) + (await count(join(root, ".burr", "memory", "playbooks"))),
+    signals: (await count(userSignalsDir())) + (await count(join(root, ".burr", "memory", "signals"))),
     lastHit: summary.lastHits[0]
       ? { ts: summary.lastHits[0].ts, path: summary.lastHits[0].path }
       : undefined,

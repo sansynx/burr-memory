@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { runGlobal } from "./global.js";
 import { runInit } from "./init.js";
 import { summarizeUsage } from "../shared/ledger.js";
 import {
   captureSignal,
+  promotePlaybook,
   readMode,
   resolvePlaybook,
   runSearch,
@@ -15,11 +17,13 @@ import type { Mode } from "../shared/types.js";
 const HELP = `Burr — local debugging memory for coding agents.
 
 Usage:
-  burr init [dir]              write .burr/ and host own-files
+  burr init [dir]              write .burr/ and host own-files in one project
+  burr global                  turn Burr on for every new project (user-level rules)
   burr [on|strict|off]         status, or set mode
-  burr search <text>           search local memory
+  burr search <text>           search shared memory on this machine
   burr capture --error <text>  save a redacted signal
   burr resolve --error <text> --cause <text> --fix <text> --verify <text>
+  burr promote [path]          lift an old project playbook into shared memory
   burr audit                   usage from usage.jsonl
   burr help                    this screen
 
@@ -69,13 +73,18 @@ export async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (command === "global") {
+    await runGlobal({ log: (line) => console.log(line) });
+    return 0;
+  }
+
   if (command === "on" || command === "strict" || command === "off") {
     await setMode(cwd, command);
     console.log(`mode ${command}`);
     return 0;
   }
 
-  if (command === "status" || command === undefined) {
+  if (command === "status") {
     try {
       const current = await status(cwd);
       console.log(
@@ -103,7 +112,7 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
     for (const hit of hits) {
-      console.log(`${hit.path}\n  ${hit.excerpt}\n`);
+      console.log(`${hit.path}  [${hit.source}]\n  ${hit.excerpt}\n`);
     }
     return 0;
   }
@@ -121,7 +130,6 @@ export async function main(argv: string[]): Promise<number> {
       exitCode: flag(args, "exit") ?? flag(args, "exit-code"),
       attemptedFixes: flags(args, "attempt"),
       whyKeep: flag(args, "why"),
-      title: flag(args, "title"),
     });
     if (!result.ok) {
       console.log(`discard ${result.reason}`);
@@ -146,7 +154,6 @@ export async function main(argv: string[]): Promise<number> {
       fix,
       verification,
       failedAttempts: flags(args, "attempt"),
-      title: flag(args, "title"),
       context: {
         language: flag(args, "language"),
         framework: flag(args, "framework"),
@@ -154,6 +161,17 @@ export async function main(argv: string[]): Promise<number> {
         confidence: flag(args, "confidence"),
       },
     });
+    if (!result.ok) {
+      console.log(`discard ${result.reason}`);
+      return 0;
+    }
+    console.log(result.path);
+    return 0;
+  }
+
+  if (command === "promote") {
+    const path = restAfter(argv, "promote") || flag(args, "path") || "";
+    const result = await promotePlaybook(cwd, { path: path || undefined });
     if (!result.ok) {
       console.log(`discard ${result.reason}`);
       return 0;

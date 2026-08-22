@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { assertInside, resolveProjectRoot, writeInside, writeIfMissing } from "../../src/shared/fs.js";
@@ -25,6 +25,28 @@ describe("safe fs edges", () => {
       await writeFile(file, "");
       expect(await writeIfMissing(dir, file, "fresh")).toBe("skipped");
       expect(await (await import("node:fs/promises")).readFile(file, "utf8")).toBe("");
+    });
+  });
+
+  it("refuses writes through a symlink inside an approved root", async () => {
+    await withTempDir(async (dir) => {
+      const root = join(dir, "root");
+      const outside = join(dir, "outside");
+      const link = join(root, "linked");
+      await mkdir(root);
+      await mkdir(outside);
+      try {
+        await symlink(outside, link, "dir");
+      } catch {
+        return;
+      }
+
+      await expect(writeInside(root, "linked/escape.md", "nope")).rejects.toThrow(
+        /symlink/i,
+      );
+      await expect(readFile(join(outside, "escape.md"), "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
     });
   });
 });

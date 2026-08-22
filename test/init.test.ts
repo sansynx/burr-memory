@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runInit } from "../src/cli/init.js";
@@ -9,6 +9,7 @@ const SKILLS = [
   "burr-search",
   "burr-capture",
   "burr-resolve",
+  "burr-promote",
   "burr-audit",
   "burr-help",
 ];
@@ -29,6 +30,9 @@ describe("burr init", () => {
       expect(instructions).toContain("Burr is local debugging memory");
 
       await readFile(join(dir, ".burr", "usage.jsonl"), "utf8");
+      await expect(readdir(join(dir, ".burr", "memory"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
 
       for (const name of SKILLS) {
         for (const tree of [".burr/skills", ".claude/skills", ".agents/skills", ".pi/skills"]) {
@@ -49,6 +53,19 @@ describe("burr init", () => {
 
       const opencode = JSON.parse(await readFile(join(dir, "opencode.json"), "utf8"));
       expect(opencode.plugin).toContain("./.opencode/plugins/burr.mjs");
+
+      const ignore = await readFile(join(dir, ".gitignore"), "utf8");
+      expect(ignore.split(/\r?\n/).map((line) => line.trim())).toContain(".burr/");
+    });
+  });
+
+  it("appends .burr/ to an existing gitignore without wiping other entries", async () => {
+    await withTempDir(async (dir) => {
+      await writeFile(join(dir, ".gitignore"), "node_modules/\n");
+      await runInit(dir);
+      const ignore = await readFile(join(dir, ".gitignore"), "utf8");
+      expect(ignore).toContain("node_modules/");
+      expect(ignore).toMatch(/^\.burr\/$/m);
     });
   });
 

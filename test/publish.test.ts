@@ -10,6 +10,10 @@ describe("publish surface", () => {
     expect(pkg.name).toBe("burr-memory");
     expect(pkg.bin.burr).toBe("dist/cli/index.js");
     expect(pkg.files).toContain("LICENSE");
+    expect(pkg.files).toContain(".opencode/plugins/burr.mjs");
+    expect(pkg.files).not.toContain(".opencode");
+    expect(pkg.scripts.build).toContain("npm run clean");
+    expect(pkg.scripts.prepublishOnly).toContain("npm run check");
     expect(pkg.author).toBeUndefined();
     expect(JSON.stringify(pkg)).not.toMatch(/sanat|gmail\.com|Users/i);
     const license = await readFile(join(root, "LICENSE"), "utf8");

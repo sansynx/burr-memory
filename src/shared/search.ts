@@ -1,7 +1,12 @@
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
+import {
+  userPlaybooksDir,
+  userSignalsDir,
+  userMemoryRel,
+} from "./user-memory.js";
 import { tokenize } from "./tokens.js";
-import type { SearchHit } from "./types.js";
+import type { MemorySource, SearchHit } from "./types.js";
 
 function parseFrontmatter(markdown: string): { matter: string; body: string } {
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
@@ -34,30 +39,64 @@ async function listMarkdown(dir: string): Promise<string[]> {
   }
 }
 
-export async function searchMemoryFiles(root: string, query: string): Promise<SearchHit[]> {
+async function scoreFile(
+  file: string,
+  queryTokens: string[],
+  displayPath: string,
+  source: MemorySource,
+): Promise<SearchHit | null> {
+  const markdown = await readFile(file, "utf8");
+  const { matter, body } = parseFrontmatter(markdown);
+  const nameTokens = tokenize(basename(file));
+  const matterTokens = tokenize(matter);
+  const bodyTokens = tokenize(body);
+  const extra = score(queryTokens, nameTokens, 0) * 1 + score(queryTokens, matterTokens, 0) * 0.5;
+  const total = score(queryTokens, [...nameTokens, ...matterTokens, ...bodyTokens], extra);
+  if (total <= 0) return null;
+  return {
+    path: displayPath.replaceAll("\\", "/"),
+    score: total,
+    excerpt: excerpt(body),
+    source,
+  };
+}
+
+export async function searchMemoryFiles(
+  root: string,
+  query: string,
+  options: { home?: string } = {},
+): Promise<SearchHit[]> {
   const queryTokens = tokenize(query);
-  const dirs = [
+  const hits: SearchHit[] = [];
+
+  const projectDirs = [
     join(root, ".burr", "memory", "playbooks"),
     join(root, ".burr", "memory", "signals"),
   ];
-  const files = (await Promise.all(dirs.map(listMarkdown))).flat();
-  const hits: SearchHit[] = [];
-
-  for (const file of files) {
-    const markdown = await readFile(file, "utf8");
-    const { matter, body } = parseFrontmatter(markdown);
-    const nameTokens = tokenize(file);
-    const matterTokens = tokenize(matter);
-    const bodyTokens = tokenize(body);
-    const extra = score(queryTokens, nameTokens, 0) * 1 + score(queryTokens, matterTokens, 0) * 0.5;
-    const total = score(queryTokens, [...nameTokens, ...matterTokens, ...bodyTokens], extra);
-    if (total <= 0) continue;
-    hits.push({
-      path: relative(root, file),
-      score: total,
-      excerpt: excerpt(body),
-    });
+  const projectFiles = (await Promise.all(projectDirs.map(listMarkdown))).flat();
+  for (const file of projectFiles) {
+    const hit = await scoreFile(file, queryTokens, relative(root, file), "project");
+    if (hit) hits.push(hit);
   }
 
-  return hits.sort((a, b) => b.score - a.score).slice(0, 5);
+  if (options.home !== undefined) {
+    const globalFiles = (
+      await Promise.all([
+        listMarkdown(userPlaybooksDir(options.home)),
+        listMarkdown(userSignalsDir(options.home)),
+      ])
+    ).flat();
+    for (const file of globalFiles) {
+      const kind = file.replaceAll("\\", "/").includes("/signals/") ? "signals" : "playbooks";
+      const hit = await scoreFile(file, queryTokens, userMemoryRel(kind, file), "global");
+      if (hit) hits.push(hit);
+    }
+  }
+
+  return hits
+    .sort((a, b) => {
+      if (a.source !== b.source) return a.source === "global" ? -1 : 1;
+      return b.score - a.score;
+    })
+    .slice(0, 5);
 }

@@ -8,12 +8,13 @@ const SKILLS = [
   "burr-search",
   "burr-capture",
   "burr-resolve",
+  "burr-promote",
   "burr-audit",
   "burr-help",
 ];
 
 describe("canonical package files", () => {
-  it("ships six SKILL.md files with the locked command names", async () => {
+  it("ships seven SKILL.md files with the locked command names", async () => {
     const root = findPackageRoot();
     for (const name of SKILLS) {
       const markdown = await readFile(join(root, "skills", name, "SKILL.md"), "utf8");

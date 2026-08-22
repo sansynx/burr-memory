@@ -7,6 +7,7 @@ export const SKILL_NAMES = [
   "burr-search",
   "burr-capture",
   "burr-resolve",
+  "burr-promote",
   "burr-audit",
   "burr-help",
 ] as const;

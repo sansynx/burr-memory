@@ -7,12 +7,13 @@ description: One-screen Burr command reference. Use when the user says /burr-hel
 
 Print this and stop:
 
-Burr keeps debugging memory in `.burr/` in this project.
+Burr keeps debugging memory in ~/.burr/memory/ on this machine.
 
 /burr [on|strict|off]   status or set mode
-/burr-search            search local memory before guessing
+/burr-search            search shared memory (all your projects)
 /burr-capture           save a reusable failure
 /burr-resolve           write a playbook after a verified fix
+/burr-promote           lift an old project-only playbook into shared memory
 /burr-audit             usage from usage.jsonl
 /burr-help              this screen
 

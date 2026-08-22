@@ -6,7 +6,7 @@ import { findPackageRoot } from "../../src/shared/package-root.js";
 import { SKILL_NAMES, withTempDir } from "../helpers.js";
 
 describe("Claude Code", () => {
-  it("copies all six project skills as /burr* commands", async () => {
+  it("copies all seven project skills as /burr* commands", async () => {
     await withTempDir(async (dir) => {
       await runInit(dir);
       for (const name of SKILL_NAMES) {

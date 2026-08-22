@@ -13,7 +13,7 @@ async function loadPlugin() {
 }
 
 describe("OpenCode", () => {
-  it("writes the local plugin and six slash command files", async () => {
+  it("writes the local plugin and seven slash command files", async () => {
     await withTempDir(async (dir) => {
       await runInit(dir);
       const plugin = await readFile(join(dir, ".opencode", "plugins", "burr.mjs"), "utf8");
@@ -39,11 +39,11 @@ describe("OpenCode", () => {
     });
   });
 
-  it("registers the six commands from SKILL.md files", async () => {
+  it("registers the seven commands from SKILL.md files", async () => {
     const mod = await loadPlugin();
     const hooks = await mod.default({ directory: findPackageRoot(), worktree: findPackageRoot() });
     expect(Object.keys(hooks.command)).toEqual([...SKILL_NAMES]);
-    expect(hooks.command["burr-search"].template).toContain("Search `.burr/memory");
+    expect(hooks.command["burr-search"].template).toContain("Search `~/.burr/memory");
   });
 
   it("injects the always-on rule when mode is on", async () => {

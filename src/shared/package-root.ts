@@ -18,7 +18,7 @@ export function findPackageRoot(
         const hasBurrBin =
           bin === "dist/cli/index.js" ||
           (typeof bin === "object" && bin !== null && "burr" in bin);
-        if (hasBurrBin || parsed.name === "burr" || parsed.name === "burr-memory") {
+        if (hasBurrBin || parsed.name === "burr-memory") {
           return dir;
         }
       } catch {

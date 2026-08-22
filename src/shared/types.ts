@@ -1,6 +1,7 @@
 export type Mode = "on" | "strict" | "off";
 
-export type Verb = "search" | "hit" | "miss" | "capture" | "resolve" | "discard";
+export type Verb = "search" | "hit" | "miss" | "capture" | "resolve" | "promote" | "discard";
+export type MemorySource = "project" | "global";
 
 export interface UsageEvent {
   ts: string;
@@ -11,19 +12,16 @@ export interface UsageEvent {
 }
 
 export interface CaptureInput {
-  title?: string;
   error: string;
   stack?: string;
   command?: string;
   exitCode?: number | string;
   attemptedFixes?: string[];
-  context?: string;
   whyKeep?: string;
   rootCause?: string;
 }
 
 export interface ResolveInput {
-  title?: string;
   error: string;
   rootCause: string;
   fix: string;
@@ -41,6 +39,7 @@ export interface SearchHit {
   path: string;
   score: number;
   excerpt: string;
+  source: MemorySource;
 }
 
 export interface Admission {

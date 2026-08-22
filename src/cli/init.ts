@@ -1,6 +1,8 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { writeIfMissing, resolveProjectRoot } from "../shared/fs.js";
+import { ensureBurrGitignore } from "../shared/gitignore.js";
+import { mergeOpenCodePlugin } from "../shared/opencode.js";
 import { findPackageRoot } from "../shared/package-root.js";
 
 const SKILLS = [
@@ -8,13 +10,14 @@ const SKILLS = [
   "burr-search",
   "burr-capture",
   "burr-resolve",
+  "burr-promote",
   "burr-audit",
   "burr-help",
 ] as const;
 
 const PLUGIN_PATH = "./.opencode/plugins/burr.mjs";
 const CURSOR_FRONTMATTER = `---
-description: Local debugging memory. Search .burr before non-trivial fixes.
+description: Local debugging memory. Search shared Burr memory before non-trivial fixes.
 alwaysApply: true
 ---
 
@@ -32,34 +35,6 @@ export interface InitOptions {
 
 function posix(path: string): string {
   return path.replaceAll("\\", "/");
-}
-
-async function mergePluginJson(
-  root: string,
-  file: string,
-  plugin: string,
-): Promise<"created" | "skipped"> {
-  const dest = join(root, file);
-  let data: Record<string, unknown> = {};
-  try {
-    data = JSON.parse(await readFile(dest, "utf8")) as Record<string, unknown>;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      data = {};
-    } else if (error instanceof SyntaxError) {
-      return "skipped";
-    } else {
-      throw error;
-    }
-  }
-  const list = Array.isArray(data.plugin) ? [...(data.plugin as string[])] : [];
-  if (list.includes(plugin)) return "skipped";
-  data.plugin = [...list, plugin];
-  const { writeFile } = await import("node:fs/promises");
-  const { dirname } = await import("node:path");
-  await mkdir(dirname(dest), { recursive: true });
-  await writeFile(dest, `${JSON.stringify(data, null, 2)}\n`);
-  return "created";
 }
 
 export async function runInit(cwd: string, options: InitOptions = {}): Promise<InitResult> {
@@ -84,12 +59,10 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
   const config = await readFile(join(pack, "templates", "config.json"), "utf8");
   const plugin = await readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8");
 
-  await mkdir(join(root, ".burr", "memory", "playbooks"), { recursive: true });
-  await mkdir(join(root, ".burr", "memory", "signals"), { recursive: true });
-
   await write(".burr/config.json", config.endsWith("\n") ? config : `${config}\n`);
   await write(".burr/instructions.md", instructions.endsWith("\n") ? instructions : `${instructions}\n`);
   await write(".burr/usage.jsonl", "");
+  await note(".gitignore", await ensureBurrGitignore(root));
 
   for (const name of SKILLS) {
     const skill = await readFile(join(pack, "skills", name, "SKILL.md"), "utf8");
@@ -104,7 +77,7 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
   await write(".windsurf/rules/burr.md", instructions.endsWith("\n") ? instructions : `${instructions}\n`);
 
   for (const file of ["opencode.json", ".opencode/opencode.json"]) {
-    const result = await mergePluginJson(root, file, PLUGIN_PATH);
+    const result = await mergeOpenCodePlugin(root, file, PLUGIN_PATH);
     await note(file, result);
   }
 
