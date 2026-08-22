@@ -1,0 +1,55 @@
+{
+  "name": "burr",
+  "version": "0.1.0",
+  "description": "Local debugging memory for coding agents. Search before guess. Capture reusable failures. Playbook after verify.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "burr": "dist/cli/index.js"
+  },
+  "main": "./.opencode/plugins/burr.mjs",
+  "exports": {
+    ".": "./.opencode/plugins/burr.mjs",
+    "./cli": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "templates",
+    "assets",
+    ".claude-plugin",
+    ".codex-plugin",
+    ".opencode",
+    "pi-extension",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepack": "tsc"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "burr",
+    "debugging",
+    "memory",
+    "skills",
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./pi-extension/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.17.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
