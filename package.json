@@ -1,9 +1,12 @@
 {
-  "name": "burr",
+  "name": "burr-memory",
   "version": "0.1.0",
   "description": "Local debugging memory for coding agents. Search before guess. Capture reusable failures. Playbook after verify.",
   "type": "module",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "burr": "dist/cli/index.js"
   },
@@ -21,7 +24,8 @@
     ".codex-plugin",
     ".opencode",
     "pi-extension",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",

@@ -5,9 +5,11 @@
 Local debugging memory for coding agents. A burr is a seed that hooks on and rides with the next passerby.
 
 ```bash
-npm install -D burr
+npm install -D burr-memory
 npx burr init
 ```
+
+The product and CLI are **Burr**. The npm name is `burr-memory` because [`burr`](https://www.npmjs.com/package/burr) is already taken by an unrelated 2013 compiler. After install, the binary is still `burr`.
 
 No account. No key. No network after install. Memory lives in `.burr/` in this project.
 
@@ -50,3 +52,11 @@ Mode `on` = search before non-trivial fixes. `strict` = do not patch until a sea
 ```
 
 Search is filename + YAML frontmatter + token overlap. No embeddings. Secrets are redacted before any disk write.
+
+## From this repo
+
+```bash
+npm install
+npm test
+npm run build
+```
