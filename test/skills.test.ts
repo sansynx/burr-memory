@@ -41,4 +41,14 @@ describe("canonical package files", () => {
     expect(svg).not.toMatch(/>Burr</);
     expect(svg).not.toMatch(/>burr</);
   });
+
+  it("ships a portable how-it-works SVG without replacement characters", async () => {
+    const root = findPackageRoot();
+    const svg = await readFile(join(root, "assets", "burr-how-it-works.svg"), "utf8");
+    expect(svg).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain("</svg>");
+    expect(svg).not.toContain("\uFFFD");
+    expect(svg).toContain("~/.burr/memory");
+    expect(svg).toContain("Any project. Same machine.");
+  });
 });

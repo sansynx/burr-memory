@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
   <title id="title">How Burr works</title>
-  <desc id="desc">A failure is searched against local memory, captured as a redacted signal if it is reusable, then written as a playbook only after a verified fix so the next session can hook onto it.</desc>
+  <desc id="desc">A failure is searched against shared local memory, captured as a redacted signal if it is reusable, then written as a playbook only after a verified fix so another project or session can hook onto it.</desc>
   <rect width="960" height="420" fill="#0F0F0E"/>
 
   <g transform="translate(36 36) scale(0.28)">
@@ -19,7 +19,7 @@
     </g>
   </g>
   <text x="86" y="48" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="22">How a burr rides</text>
-  <text x="86" y="70" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.7">local files only · no cloud · no key</text>
+  <text x="86" y="70" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.7">local files only | no cloud | no key</text>
 
   <!-- hooked connectors -->
   <g fill="none" stroke="#F4EEE7" stroke-width="1.6">
@@ -40,8 +40,8 @@
     <rect x="36" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
     <text x="52" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">01  break</text>
     <text x="52" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">The failure</text>
-    <text x="52" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">error · stack</text>
-    <text x="52" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">command · exit</text>
+    <text x="52" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">error | stack</text>
+    <text x="52" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">command | exit</text>
   </g>
 
   <!-- 2 search -->
@@ -49,7 +49,7 @@
     <rect x="218" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
     <text x="234" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">02  search</text>
     <text x="234" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Ask memory</text>
-    <text x="234" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">.burr/memory</text>
+    <text x="234" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">~/.burr/memory</text>
     <text x="234" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">token overlap</text>
   </g>
 
@@ -58,7 +58,7 @@
     <rect x="400" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
     <text x="416" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">03  hook</text>
     <text x="416" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Capture</text>
-    <text x="416" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">redact · admit</text>
+    <text x="416" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">redact | admit</text>
     <text x="416" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">signals/*.md</text>
   </g>
 
@@ -83,8 +83,8 @@
   <!-- discard branch -->
   <path d="M475 240 V292 H520" fill="none" stroke="#F4EEE7" stroke-width="1.2" opacity="0.55"/>
   <rect x="528" y="272" width="300" height="44" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1" opacity="0.9"/>
-  <text x="544" y="300" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.8">discard ephemeral junk · nothing hits disk</text>
+  <text x="544" y="300" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.8">discard ephemeral junk | nothing hits disk</text>
 
-  <text x="36" y="388" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="15">Same project. Same files. The next passerby does not guess again.</text>
-  <text x="36" y="408" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.6">.burr/config.json · mode on | strict | off</text>
+  <text x="36" y="388" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="15">Any project. Same machine. The next passerby does not guess again.</text>
+  <text x="36" y="408" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.6">.burr/config.json | mode on | strict | off</text>
 </svg>
