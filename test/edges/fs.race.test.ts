@@ -17,12 +17,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       }
       if (race.target && target === race.target) {
         race.target = "";
-        try {
-          await actual.unlink(target);
-          await actual.writeFile(target, "decoy");
-        } catch {
-          // Windows can keep the name in a pending-delete state while the handle is open.
-        }
+        await actual.unlink(target);
+        await actual.writeFile(target, "decoy");
       }
       return handle;
     },
@@ -53,18 +49,21 @@ describe("safe fs path races", () => {
     });
   });
 
-  it("refuses a path swapped after the destination handle opens", async () => {
-    await withTempDir(async (dir) => {
-      const root = join(dir, "root");
-      const outside = join(dir, "outside.txt");
-      const target = join(root, "target.txt");
-      await mkdir(root);
-      await writeFile(outside, "preserve this");
-      await link(outside, target);
-      race.target = resolve(target);
+  it.skipIf(process.platform === "win32")(
+    "refuses a path swapped after the destination handle opens",
+    async () => {
+      await withTempDir(async (dir) => {
+        const root = join(dir, "root");
+        const outside = join(dir, "outside.txt");
+        const target = join(root, "target.txt");
+        await mkdir(root);
+        await writeFile(outside, "preserve this");
+        await link(outside, target);
+        race.target = resolve(target);
 
-      await expect(writeInside(root, target, "overwrite")).rejects.toThrow(/changed path/i);
-      expect(await readFile(outside, "utf8")).toBe("preserve this");
-    });
-  });
+        await expect(writeInside(root, target, "overwrite")).rejects.toThrow(/changed path/i);
+        expect(await readFile(outside, "utf8")).toBe("preserve this");
+      });
+    },
+  );
 });

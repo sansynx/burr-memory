@@ -110,6 +110,18 @@ async function prepareInside(root: string, target: string): Promise<string> {
   return dest;
 }
 
+async function refuseUnstablePath(target: string, action: () => Promise<void>): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    if (error instanceof BurrFsError) throw error;
+    if (isUnstablePathError(error)) {
+      throw new BurrFsError(`Refusing changed path during write: ${target}`);
+    }
+    throw error;
+  }
+}
+
 async function writeSafely(
   root: string,
   dest: string,
@@ -119,8 +131,10 @@ async function writeSafely(
 ): Promise<void> {
   const handle = await open(dest, flags | constants.O_NOFOLLOW, 0o600);
   try {
-    await assertCanonicalParent(root, dest);
-    await assertOpenedFile(handle, dest);
+    await refuseUnstablePath(dest, async () => {
+      await assertCanonicalParent(root, dest);
+      await assertOpenedFile(handle, dest);
+    });
     if (truncate) await handle.truncate(0);
     await handle.writeFile(data, "utf8");
   } finally {
