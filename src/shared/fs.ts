@@ -69,9 +69,25 @@ async function assertUnlinkedFile(target: string): Promise<void> {
   }
 }
 
+function isUnstablePathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "ENOENT" || code === "EPERM" || code === "EACCES" || code === "EBUSY";
+}
+
+async function lstatAfterOpen(target: string) {
+  try {
+    return await lstat(target);
+  } catch (error) {
+    if (isUnstablePathError(error)) {
+      throw new BurrFsError(`Refusing changed path during write: ${target}`);
+    }
+    throw error;
+  }
+}
+
 async function assertOpenedFile(handle: FileHandle, target: string): Promise<void> {
   const opened = await handle.stat();
-  const current = await lstat(target);
+  const current = await lstatAfterOpen(target);
   if (
     !opened.isFile() ||
     !current.isFile() ||
