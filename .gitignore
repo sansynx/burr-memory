@@ -14,3 +14,4 @@ coverage/
 .opencode/command/
 .opencode/opencode.json
 opencode.json
+.local/

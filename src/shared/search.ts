@@ -1,5 +1,6 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
+import { readInside } from "./fs.js";
 import {
   userPlaybooksDir,
   userSignalsDir,
@@ -32,20 +33,30 @@ function score(queryTokens: string[], fileTokens: string[], extra: number): numb
 
 async function listMarkdown(dir: string): Promise<string[]> {
   try {
-    const names = await readdir(dir);
-    return names.filter((name) => name.endsWith(".md")).map((name) => join(dir, name));
+    const info = await lstat(dir);
+    if (!info.isDirectory() || info.isSymbolicLink()) return [];
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+      .map((entry) => join(dir, entry.name));
   } catch {
     return [];
   }
 }
 
 async function scoreFile(
+  root: string,
   file: string,
   queryTokens: string[],
   displayPath: string,
   source: MemorySource,
 ): Promise<SearchHit | null> {
-  const markdown = await readFile(file, "utf8");
+  let markdown: string;
+  try {
+    markdown = await readInside(root, file);
+  } catch {
+    return null;
+  }
   const { matter, body } = parseFrontmatter(markdown);
   const nameTokens = tokenize(basename(file));
   const matterTokens = tokenize(matter);
@@ -75,7 +86,7 @@ export async function searchMemoryFiles(
   ];
   const projectFiles = (await Promise.all(projectDirs.map(listMarkdown))).flat();
   for (const file of projectFiles) {
-    const hit = await scoreFile(file, queryTokens, relative(root, file), "project");
+    const hit = await scoreFile(root, file, queryTokens, relative(root, file), "project");
     if (hit) hits.push(hit);
   }
 
@@ -88,7 +99,7 @@ export async function searchMemoryFiles(
     ).flat();
     for (const file of globalFiles) {
       const kind = file.replaceAll("\\", "/").includes("/signals/") ? "signals" : "playbooks";
-      const hit = await scoreFile(file, queryTokens, userMemoryRel(kind, file), "global");
+      const hit = await scoreFile(options.home, file, queryTokens, userMemoryRel(kind, file), "global");
       if (hit) hits.push(hit);
     }
   }

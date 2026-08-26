@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { appendInside, readInside, withInsideLock, writeInside } from "./fs.js";
 import type { UsageEvent, UsageSummary, Verb } from "./types.js";
 
 const VERBS: Verb[] = ["search", "hit", "miss", "capture", "resolve", "promote", "discard"];
@@ -20,7 +20,7 @@ function parseLine(line: string): UsageEvent | null {
 
 export async function readUsage(root: string): Promise<UsageEvent[]> {
   try {
-    const raw = await readFile(usagePath(root), "utf8");
+    const raw = await readInside(root, usagePath(root));
     return raw
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -29,20 +29,6 @@ export async function readUsage(root: string): Promise<UsageEvent[]> {
       .filter((event): event is UsageEvent => event !== null);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
-}
-
-async function isCorrupt(root: string): Promise<boolean> {
-  try {
-    const raw = await readFile(usagePath(root), "utf8");
-    return raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .some((line) => parseLine(line) === null);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
 }
@@ -59,15 +45,29 @@ export async function appendUsage(
     ...(event.reason ? { reason: event.reason } : {}),
   };
   const file = usagePath(root);
-  await mkdir(dirname(file), { recursive: true });
-  if (await isCorrupt(root)) {
-    const events = await readUsage(root);
-    events.push(next);
-    await writeFile(file, `${events.map((item) => JSON.stringify(item)).join("\n")}\n`);
+  return withInsideLock(root, `${file}.lock`, async () => {
+    let raw = "";
+    try {
+      raw = await readInside(root, file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+
+    const lines = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.some((line) => parseLine(line) === null)) {
+      const events = lines
+        .map(parseLine)
+        .filter((event): event is UsageEvent => event !== null);
+      events.push(next);
+      await writeInside(root, file, `${events.map((item) => JSON.stringify(item)).join("\n")}\n`);
+    } else {
+      await appendInside(root, file, `${JSON.stringify(next)}\n`);
+    }
     return next;
-  }
-  await appendFile(file, `${JSON.stringify(next)}\n`);
-  return next;
+  });
 }
 
 export async function summarizeUsage(root: string): Promise<UsageSummary> {

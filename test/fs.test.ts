@@ -39,7 +39,7 @@ describe("safe fs", () => {
       const link = join(dir, "link");
       await mkdir(real);
       try {
-        await symlink(real, link, "dir");
+        await symlink(real, link, process.platform === "win32" ? "junction" : "dir");
       } catch {
         return;
       }

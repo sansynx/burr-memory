@@ -11,7 +11,9 @@ export async function mergeOpenCodePlugin(
   let data: Record<string, unknown>;
 
   try {
-    data = JSON.parse(await readFile(dest, "utf8")) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(await readFile(dest, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "skipped";
+    data = parsed as Record<string, unknown>;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       data = {};

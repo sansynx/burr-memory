@@ -23,4 +23,15 @@ describe("publish surface", () => {
     expect(license).toContain("MIT License");
     expect(license).not.toMatch(/sanat|gmail\.com/i);
   });
+
+  it("uses file-level allowlisting for non-generated package assets", async () => {
+    const root = findPackageRoot();
+    const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+    expect(pkg.files).not.toContain("skills");
+    expect(pkg.files).not.toContain("templates");
+    expect(pkg.files).not.toContain("assets");
+    expect(pkg.files).not.toContain("pi-extension");
+    expect(pkg.files).not.toContain(".claude-plugin");
+    expect(pkg.files).not.toContain(".codex-plugin");
+  });
 });

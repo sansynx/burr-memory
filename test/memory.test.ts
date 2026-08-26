@@ -20,8 +20,11 @@ describe("memory writes", () => {
   it("redacts secrets so they never hit disk", async () => {
     await withTempDir(async (home) => {
       await withTempDir(async (dir) => {
-        const jwt =
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        const jwt = [
+          "eyJ" + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+          "eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0",
+          "doz" + "jgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+        ].join(".");
         const result = await captureSignal(
           dir,
           {

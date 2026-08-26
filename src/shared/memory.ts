@@ -1,9 +1,9 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { admitResolution, admitSignal } from "./admission.js";
 import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, TEXT_LIMIT, clip } from "./bounds.js";
 import { ensureStore } from "./ensure-store.js";
-import { assertInside, writeIfMissing, writeInside } from "./fs.js";
+import { BurrFsError, readInside, writeIfMissing, writeInside } from "./fs.js";
 import { userHome } from "./home.js";
 import {
   ensureUserMemory,
@@ -22,8 +22,12 @@ function boundList(items: string[] | undefined, count: number, limit: number): s
 }
 
 function titleFrom(error: string, fallback: string): string {
-  const line = clip(error.split(/\r?\n/)[0] ?? fallback, SHORT_LIMIT);
+  const line = clip(error.split(/\r?\n/)[0], SHORT_LIMIT);
   return line || fallback;
+}
+
+function redactShort(value: unknown): string | undefined {
+  return typeof value === "string" ? clip(redact(value), SHORT_LIMIT) : undefined;
 }
 
 export async function captureSignal(
@@ -36,6 +40,8 @@ export async function captureSignal(
     error: clip(input.error ?? "", TEXT_LIMIT),
     stack: input.stack ? clip(input.stack, TEXT_LIMIT) : undefined,
     command: input.command ? clip(input.command, SHORT_LIMIT) : undefined,
+    exitCode:
+      input.exitCode === undefined ? undefined : clip(redact(String(input.exitCode)), SHORT_LIMIT),
     attemptedFixes: boundList(input.attemptedFixes, ATTEMPT_COUNT, ATTEMPT_LIMIT),
     whyKeep: input.whyKeep ? clip(input.whyKeep, TEXT_LIMIT) : undefined,
     rootCause: input.rootCause ? clip(input.rootCause, TEXT_LIMIT) : undefined,
@@ -86,6 +92,14 @@ export async function resolvePlaybook(
     fix: clip(input.fix ?? "", TEXT_LIMIT),
     verification: clip(input.verification ?? "", TEXT_LIMIT),
     failedAttempts: boundList(input.failedAttempts, ATTEMPT_COUNT, ATTEMPT_LIMIT),
+    context: input.context
+      ? {
+          language: redactShort(input.context.language),
+          framework: redactShort(input.context.framework),
+          risk: redactShort(input.context.risk),
+          confidence: redactShort(input.context.confidence),
+        }
+      : undefined,
   };
   const home = options.home ?? userHome();
   await ensureStore(root);
@@ -173,7 +187,11 @@ async function newestLegacyPlaybook(root: string): Promise<string | undefined> {
   const dir = join(root, ".burr", "memory", "playbooks");
   let names: string[];
   try {
-    names = (await readdir(dir)).filter((name) => name.endsWith(".md"));
+    const info = await lstat(dir);
+    if (!info.isDirectory() || info.isSymbolicLink()) return undefined;
+    names = (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+      .map((entry) => entry.name);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
@@ -193,9 +211,10 @@ async function newestLegacyPlaybook(root: string): Promise<string | undefined> {
 
 async function legacyPlaybookExists(root: string, rel: string): Promise<boolean> {
   try {
-    return (await stat(assertInside(root, join(root, rel)))).isFile();
+    await readInside(root, join(root, rel));
+    return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if (error instanceof BurrFsError || (error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
 }
@@ -228,26 +247,22 @@ export async function promotePlaybook(
     return { ok: false, reason: rel ? "not-a-playbook" : "missing-playbook" };
   }
 
-  let dest: string;
-  try {
-    dest = assertInside(root, join(root, rel));
-  } catch {
-    await appendUsage(root, { verb: "discard", reason: "not-a-playbook" });
-    return { ok: false, reason: "not-a-playbook" };
-  }
-
   let markdown: string;
   try {
-    markdown = await readFile(dest, "utf8");
+    markdown = await readInside(root, join(root, rel));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       await appendUsage(root, { verb: "discard", reason: "missing-playbook" });
       return { ok: false, reason: "missing-playbook" };
     }
+    if (error instanceof BurrFsError) {
+      await appendUsage(root, { verb: "discard", reason: "not-a-playbook" });
+      return { ok: false, reason: "not-a-playbook" };
+    }
     throw error;
   }
 
-  if (/^kind:\s*signal\s*$/m.test(markdown) || rel.startsWith(".burr/memory/signals/")) {
+  if (/^kind:\s*signal\s*$/m.test(markdown)) {
     await appendUsage(root, { verb: "discard", reason: "not-a-playbook" });
     return { ok: false, reason: "not-a-playbook" };
   }
@@ -270,7 +285,7 @@ export async function setMode(root: string, mode: Mode): Promise<void> {
   const dest = join(root, ".burr", "config.json");
   let config: Record<string, unknown> = {};
   try {
-    const parsed = JSON.parse(await readFile(dest, "utf8")) as unknown;
+    const parsed = JSON.parse(await readInside(root, dest)) as unknown;
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       config = parsed as Record<string, unknown>;
     }
@@ -282,8 +297,7 @@ export async function setMode(root: string, mode: Mode): Promise<void> {
 
 export async function readMode(root: string): Promise<Mode> {
   try {
-    const { readFile } = await import("node:fs/promises");
-    const config = JSON.parse(await readFile(join(root, ".burr", "config.json"), "utf8")) as {
+    const config = JSON.parse(await readInside(root, join(root, ".burr", "config.json"))) as {
       mode?: string;
     };
     if (config.mode === "on" || config.mode === "strict" || config.mode === "off") return config.mode;
@@ -299,7 +313,6 @@ export async function status(root: string): Promise<{
   signals: number;
   lastHit?: { ts: string; path?: string };
 }> {
-  const { readdir } = await import("node:fs/promises");
   const count = async (dir: string) => {
     try {
       return (await readdir(dir)).filter((name) => name.endsWith(".md")).length;

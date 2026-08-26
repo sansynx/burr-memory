@@ -1,5 +1,7 @@
-import { mkdir, lstat, realpath, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { constants } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdir, lstat, open, realpath, unlink } from "node:fs/promises";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 export class BurrFsError extends Error {
   constructor(message: string) {
@@ -44,16 +46,62 @@ async function assertNoSymlinkSegments(root: string, target: string): Promise<vo
   }
 }
 
+async function guardedPath(root: string, target: string): Promise<string> {
+  const dest = assertInside(root, joinSafe(root, target));
+  await assertNoSymlinkSegments(root, dest);
+  return dest;
+}
+
+async function assertCanonicalParent(root: string, target: string): Promise<void> {
+  const canonicalRoot = await realpath(root);
+  const canonicalParent = await realpath(dirname(target));
+  assertInside(canonicalRoot, resolve(canonicalParent, basename(target)));
+}
+
+async function assertUnlinkedFile(target: string): Promise<void> {
+  const info = await lstat(target);
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new BurrFsError(`Refusing non-file path: ${target}`);
+  }
+  if (info.nlink > 1) {
+    throw new BurrFsError(`Refusing hard link: ${target}`);
+  }
+}
+
+async function prepareInside(root: string, target: string): Promise<string> {
+  const dest = await guardedPath(root, target);
+  await mkdir(dirname(dest), { recursive: true });
+  await assertNoSymlinkSegments(root, dest);
+  await assertCanonicalParent(root, dest);
+  return dest;
+}
+
+async function writeSafely(
+  root: string,
+  dest: string,
+  flags: number,
+  data: string,
+  truncate = false,
+): Promise<void> {
+  const handle = await open(dest, flags | constants.O_NOFOLLOW, 0o600);
+  try {
+    await assertCanonicalParent(root, dest);
+    await assertUnlinkedFile(dest);
+    if (truncate) await handle.truncate(0);
+    await handle.writeFile(data, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function writeIfMissing(
   root: string,
   target: string,
   data: string,
 ): Promise<"created" | "skipped"> {
-  const dest = assertInside(root, target);
-  await assertNoSymlinkSegments(root, dest);
-  await mkdir(dirname(dest), { recursive: true });
+  const dest = await prepareInside(root, target);
   try {
-    await writeFile(dest, data, { flag: "wx" });
+    await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, data);
     return "created";
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") return "skipped";
@@ -62,11 +110,90 @@ export async function writeIfMissing(
 }
 
 export async function writeInside(root: string, target: string, data: string): Promise<string> {
-  const dest = assertInside(root, joinSafe(root, target));
-  await assertNoSymlinkSegments(root, dest);
-  await mkdir(dirname(dest), { recursive: true });
-  await writeFile(dest, data);
+  const dest = await prepareInside(root, target);
+  await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT, data, true);
   return dest;
+}
+
+export async function appendInside(root: string, target: string, data: string): Promise<string> {
+  const dest = await prepareInside(root, target);
+  await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, data);
+  return dest;
+}
+
+export async function readInside(root: string, target: string): Promise<string> {
+  const dest = await guardedPath(root, target);
+  await assertCanonicalParent(root, dest);
+  await assertUnlinkedFile(dest);
+  const before = await lstat(dest);
+  const handle = await open(dest, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    await assertCanonicalParent(root, dest);
+    const text = await handle.readFile("utf8");
+    const after = await lstat(dest);
+    if (
+      !after.isFile() ||
+      after.isSymbolicLink() ||
+      after.dev !== before.dev ||
+      after.ino !== before.ino
+    ) {
+      throw new BurrFsError(`Refusing changed path during read: ${target}`);
+    }
+    return text;
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function withInsideLock<T>(
+  root: string,
+  target: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const dest = await prepareInside(root, target);
+  const token = `${randomUUID()}\n`;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const handle = await open(
+        dest,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+        0o600,
+      );
+      try {
+        await handle.writeFile(token, "utf8");
+      } finally {
+        await handle.close();
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= 500) throw error;
+      let existing;
+      try {
+        existing = await lstat(dest);
+      } catch (statError) {
+        if ((statError as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw statError;
+      }
+      if (!existing.isFile() || existing.isSymbolicLink() || existing.nlink > 1) {
+        throw new BurrFsError(`Refusing lock at non-file path: ${target}`);
+      }
+      if (Date.now() - existing.mtimeMs > 30_000) {
+        await unlink(dest);
+        continue;
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+    }
+  }
+
+  try {
+    return await action();
+  } finally {
+    if ((await readInside(root, dest).catch(() => "")) === token) {
+      await unlink(dest).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
+  }
 }
 
 function joinSafe(root: string, target: string): string {
