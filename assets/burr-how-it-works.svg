@@ -23,16 +23,16 @@
 
   <!-- hooked connectors -->
   <g fill="none" stroke="#F4EEE7" stroke-width="1.6">
-    <path d="M186 168 H214 C228 168 232 152 246 152 H268"/>
-    <path d="M368 168 H396 C410 168 414 152 428 152 H450"/>
-    <path d="M550 168 H578 C592 168 596 152 610 152 H632"/>
-    <path d="M732 168 H760 C774 168 778 152 792 152 H814" stroke="#FF5A1F"/>
+    <path d="M186 176 H218"/>
+    <path d="M368 176 H400"/>
+    <path d="M550 176 H582"/>
+    <path d="M732 176 H764" stroke="#FF5A1F"/>
   </g>
   <g fill="#F4EEE7">
-    <path d="M268 152 l-7 -5 v10 z"/>
-    <path d="M450 152 l-7 -5 v10 z"/>
-    <path d="M632 152 l-7 -5 v10 z"/>
-    <path d="M814 152 l-7 -5 v10 z" fill="#FF5A1F"/>
+    <path d="M218 176 l-7 -5 v10 z"/>
+    <path d="M400 176 l-7 -5 v10 z"/>
+    <path d="M582 176 l-7 -5 v10 z"/>
+    <path d="M764 176 l-7 -5 v10 z" fill="#FF5A1F"/>
   </g>
 
   <!-- 1 break -->
@@ -81,7 +81,7 @@
   </g>
 
   <!-- discard branch -->
-  <path d="M475 240 V292 H520" fill="none" stroke="#F4EEE7" stroke-width="1.2" opacity="0.55"/>
+  <path d="M475 240 V294 H528" fill="none" stroke="#F4EEE7" stroke-width="1.2" opacity="0.55"/>
   <rect x="528" y="272" width="300" height="44" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1" opacity="0.9"/>
   <text x="544" y="300" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.8">discard ephemeral junk | nothing hits disk</text>
 

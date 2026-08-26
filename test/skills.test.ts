@@ -51,4 +51,39 @@ describe("canonical package files", () => {
     expect(svg).toContain("~/.burr/memory");
     expect(svg).toContain("Any project. Same machine.");
   });
+
+  it("keeps how-it-works arrows in the gutters instead of through card titles", async () => {
+    const root = findPackageRoot();
+    const svg = await readFile(join(root, "assets", "burr-how-it-works.svg"), "utf8");
+    const cards = [...svg.matchAll(/<rect x="(\d+)" y="(\d+)" width="(1[56]0)" height="128"/g)].map(
+      (match) => ({
+        x: Number(match[1]),
+        y: Number(match[2]),
+        width: Number(match[3]),
+        height: 128,
+      }),
+    );
+    expect(cards).toHaveLength(5);
+
+    const connectorBlock = svg.slice(
+      svg.indexOf("<!-- hooked connectors -->"),
+      svg.indexOf("<!-- 1 break -->"),
+    );
+    const ends = [...connectorBlock.matchAll(/<path d="([^"]+)"/g)]
+      .map((match) => {
+        const horizontals = [...match[1].matchAll(/\sH(\d+)/g)];
+        return Number(horizontals.at(-1)?.[1]);
+      })
+      .filter((end) => Number.isFinite(end));
+    expect(ends).toEqual(cards.slice(1).map((card) => card.x));
+
+    for (const [index, end] of ends.entries()) {
+      const previous = cards[index];
+      const next = cards[index + 1];
+      expect(end).toBeGreaterThan(previous.x + previous.width);
+      expect(end).toBe(next.x);
+    }
+
+    expect(svg).toMatch(/M475 240 V294 H528/);
+  });
 });
