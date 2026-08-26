@@ -46,6 +46,18 @@ describe("OpenCode", () => {
     expect(hooks.command["burr-search"].template).toContain("Search `~/.burr/memory");
   });
 
+  it("registers trusted commands with actionable CLI guidance", async () => {
+    const mod = await loadPlugin();
+    const hooks = await mod.default({ directory: findPackageRoot(), worktree: findPackageRoot() });
+    expect(hooks.command.burr.template).toContain("npx burr status");
+    expect(hooks.command["burr-search"].template).toContain("npx burr search");
+    expect(hooks.command["burr-capture"].template).toContain("npx burr capture");
+    expect(hooks.command["burr-resolve"].template).toContain("npx burr resolve");
+    expect(hooks.command["burr-promote"].template).toContain("npx burr promote");
+    expect(hooks.command["burr-audit"].template).toContain("npx burr audit");
+    expect(hooks.command["burr-help"].template).toContain("npx burr help");
+  });
+
   it("injects the always-on rule when mode is on", async () => {
     await withTempDir(async (dir) => {
       await runInit(dir);

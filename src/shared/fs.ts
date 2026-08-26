@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { mkdir, lstat, open, realpath, unlink } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 export class BurrFsError extends Error {
@@ -68,6 +69,23 @@ async function assertUnlinkedFile(target: string): Promise<void> {
   }
 }
 
+async function assertOpenedFile(handle: FileHandle, target: string): Promise<void> {
+  const opened = await handle.stat();
+  const current = await lstat(target);
+  if (
+    !opened.isFile() ||
+    !current.isFile() ||
+    current.isSymbolicLink() ||
+    opened.dev !== current.dev ||
+    opened.ino !== current.ino
+  ) {
+    throw new BurrFsError(`Refusing changed path during write: ${target}`);
+  }
+  if (opened.nlink > 1 || current.nlink > 1) {
+    throw new BurrFsError(`Refusing hard link: ${target}`);
+  }
+}
+
 async function prepareInside(root: string, target: string): Promise<string> {
   const dest = await guardedPath(root, target);
   await mkdir(dirname(dest), { recursive: true });
@@ -86,7 +104,7 @@ async function writeSafely(
   const handle = await open(dest, flags | constants.O_NOFOLLOW, 0o600);
   try {
     await assertCanonicalParent(root, dest);
-    await assertUnlinkedFile(dest);
+    await assertOpenedFile(handle, dest);
     if (truncate) await handle.truncate(0);
     await handle.writeFile(data, "utf8");
   } finally {

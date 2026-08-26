@@ -9,25 +9,39 @@ Before a non-trivial fix, search ~/.burr/memory/. Capture reusable failures only
 const STRICT_INSTRUCTIONS =
   "\n\nStrict mode: do not modify code for a non-trivial fix until you have searched shared Burr memory.";
 const COMMANDS = {
-  burr: { description: "Show Burr status or set its mode", template: "Use Burr status or mode controls." },
+  burr: {
+    description: "Show Burr status or set its mode",
+    template:
+      "Run `npx burr status` and report the result. If the user requests on, strict, or off, run `npx burr <mode>` instead.",
+  },
   "burr-search": {
     description: "Search shared Burr memory",
-    template: "Search `~/.burr/memory/` before a non-trivial fix.",
+    template:
+      "Search `~/.burr/memory/` by running `npx burr search <query>` with the user's redacted error or context, then report the useful hits.",
   },
   "burr-capture": {
     description: "Capture a reusable failure",
-    template: "Capture only reusable failures after redacting sensitive data.",
+    template:
+      "For a reusable failure, run `npx burr capture --error <text>` with relevant optional flags. Redact sensitive data first.",
   },
   "burr-resolve": {
     description: "Write a verified Burr playbook",
-    template: "Write a Burr playbook only after a real verification.",
+    template:
+      "Only after a real verification, run `npx burr resolve --error <text> --cause <text> --fix <text> --verify <text>`.",
   },
   "burr-promote": {
     description: "Promote a legacy project playbook",
-    template: "Promote a legacy project playbook into shared Burr memory.",
+    template:
+      "Run `npx burr promote [path]` only for a legacy project playbook that belongs in shared Burr memory.",
   },
-  "burr-audit": { description: "Audit Burr usage", template: "Audit Burr usage from the local ledger." },
-  "burr-help": { description: "Show Burr command help", template: "Show the Burr command reference." },
+  "burr-audit": {
+    description: "Audit Burr usage",
+    template: "Run `npx burr audit` and summarize the local usage ledger.",
+  },
+  "burr-help": {
+    description: "Show Burr command help",
+    template: "Run `npx burr help` and present the command reference.",
+  },
 } as const;
 
 type PiApi = {
