@@ -213,7 +213,7 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   console.log(HELP);
-  return command ? 1 : 0;
+  return 1;
 }
 
 const invoked = process.argv[1]?.replaceAll("\\", "/");

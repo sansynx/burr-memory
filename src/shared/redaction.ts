@@ -35,6 +35,7 @@ const PATTERNS: Array<[RegExp, string]> = [
 
 export function redactUnbounded(text: string): string {
   let next = String(text ?? "");
+  if (!next) return "";
   for (const [pattern, replacement] of PATTERNS) {
     pattern.lastIndex = 0;
     next = next.replace(pattern, replacement);

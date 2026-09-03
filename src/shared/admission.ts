@@ -1,14 +1,14 @@
 import type { Admission, CaptureInput, ResolveInput } from "./types.js";
 
 const DISCARD: Array<{ reason: string; re: RegExp }> = [
-  { reason: "port-in-use", re: /EADDRINUSE|address already in use|port \d+\s+.*in use/i },
+  { reason: "port-in-use", re: /EADDRINUSE|address already in use|port \d+\s+[^\r\n]*in use/i },
   {
     reason: "dev-server-down",
-    re: /ECONNREFUSED.*(?:localhost|127\.0\.0\.1)|connect ECONNREFUSED|dev server (?:is )?(?:not running|isn't running)/i,
+    re: /ECONNREFUSED[^\r\n]*(?:localhost|127\.0\.0\.1)|connect ECONNREFUSED|dev server (?:is )?(?:not running|isn't running)/i,
   },
   {
     reason: "missing-local-asset",
-    re: /(?:ENOENT|no such file or directory).*\.(png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|css|html)\b/i,
+    re: /(?:ENOENT|no such file or directory)[^\r\n]*\.(?:png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|css|html)\b/i,
   },
   {
     reason: "unset-local-env",
@@ -42,10 +42,10 @@ function isRealVerification(text: string): boolean {
     return false;
   }
   return (
-    /\b(npm test|pnpm test|yarn test|vitest|pytest|cargo test|go test|jest)\b/i.test(trimmed) ||
-    /\b(\d+ passed|0 fail|all tests pass|tests? pass)/i.test(trimmed) ||
-    (/\breproduced\b/i.test(trimmed) && /\b(gone|no longer|fixed|disappear)/i.test(trimmed)) ||
-    /\b(measured|benchmark|timing|before\/after)\b/i.test(trimmed) ||
+    /\b(?:npm test|pnpm test|yarn test|vitest|pytest|cargo test|go test|jest)\b/i.test(trimmed) ||
+    /\b(?:\d+ passed|0 fail|all tests pass|tests? pass)/i.test(trimmed) ||
+    (/\breproduced\b/i.test(trimmed) && /\b(?:gone|no longer|fixed|disappear)/i.test(trimmed)) ||
+    /\b(?:measured|benchmark|timing|before\/after)\b/i.test(trimmed) ||
     /\bexit(?:ed)?(?: code)? 0\b/i.test(trimmed)
   );
 }

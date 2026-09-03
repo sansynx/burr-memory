@@ -3,6 +3,7 @@ import { appendInside, readInside, withInsideLock, writeInside } from "./fs.js";
 import type { UsageEvent, UsageSummary, Verb } from "./types.js";
 
 const VERBS: Verb[] = ["search", "hit", "miss", "capture", "resolve", "promote", "discard"];
+const VERB_SET = new Set<string>(VERBS);
 
 function usagePath(root: string): string {
   return join(root, ".burr", "usage.jsonl");
@@ -11,7 +12,7 @@ function usagePath(root: string): string {
 function parseLine(line: string): UsageEvent | null {
   try {
     const parsed = JSON.parse(line) as UsageEvent;
-    if (!parsed || typeof parsed.ts !== "string" || !VERBS.includes(parsed.verb)) return null;
+    if (!parsed || typeof parsed.ts !== "string" || !VERB_SET.has(parsed.verb)) return null;
     return parsed;
   } catch {
     return null;
@@ -21,12 +22,15 @@ function parseLine(line: string): UsageEvent | null {
 export async function readUsage(root: string): Promise<UsageEvent[]> {
   try {
     const raw = await readInside(root, usagePath(root));
-    return raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map(parseLine)
-      .filter((event): event is UsageEvent => event !== null);
+    const lines = raw.split(/\r?\n/);
+    const events: UsageEvent[] = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i]!.trim();
+      if (!line) continue;
+      const event = parseLine(line);
+      if (event !== null) events.push(event);
+    }
+    return events;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
@@ -53,16 +57,23 @@ export async function appendUsage(
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
 
-    const lines = raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (lines.some((line) => parseLine(line) === null)) {
-      const events = lines
-        .map(parseLine)
-        .filter((event): event is UsageEvent => event !== null);
-      events.push(next);
-      await writeInside(root, file, `${events.map((item) => JSON.stringify(item)).join("\n")}\n`);
+    const lines = raw.split(/\r?\n/);
+    let hasCorrupt = false;
+    const validEvents: UsageEvent[] = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const trimmed = lines[i]!.trim();
+      if (!trimmed) continue;
+      const parsed = parseLine(trimmed);
+      if (parsed === null) {
+        hasCorrupt = true;
+      } else {
+        validEvents.push(parsed);
+      }
+    }
+
+    if (hasCorrupt) {
+      validEvents.push(next);
+      await writeInside(root, file, `${validEvents.map((item) => JSON.stringify(item)).join("\n")}\n`);
     } else {
       await appendInside(root, file, `${JSON.stringify(next)}\n`);
     }
@@ -72,11 +83,29 @@ export async function appendUsage(
 
 export async function summarizeUsage(root: string): Promise<UsageSummary> {
   const events = await readUsage(root);
-  const counts = Object.fromEntries(VERBS.map((verb) => [verb, 0])) as Record<Verb, number>;
-  for (const event of events) counts[event.verb] += 1;
+  const counts: Record<Verb, number> = {
+    search: 0,
+    hit: 0,
+    miss: 0,
+    capture: 0,
+    resolve: 0,
+    promote: 0,
+    discard: 0,
+  };
+  const lastHits: UsageEvent[] = [];
+  const lastDiscards: UsageEvent[] = [];
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i]!;
+    counts[event.verb] += 1;
+    if (event.verb === "hit" && lastHits.length < 5) {
+      lastHits.push(event);
+    } else if (event.verb === "discard" && lastDiscards.length < 5) {
+      lastDiscards.push(event);
+    }
+  }
   return {
     counts,
-    lastHits: events.filter((event) => event.verb === "hit").slice(-5).reverse(),
-    lastDiscards: events.filter((event) => event.verb === "discard").slice(-5).reverse(),
+    lastHits,
+    lastDiscards,
   };
 }

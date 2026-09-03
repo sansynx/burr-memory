@@ -5,10 +5,7 @@ import { assertInside, writeInside } from "./fs.js";
 const ENTRY = ".burr/";
 
 function hasBurrIgnore(text: string): boolean {
-  return text.split(/\r?\n/).some((line) => {
-    const trimmed = line.trim();
-    return trimmed === ".burr/" || trimmed === ".burr";
-  });
+  return /^\s*\.burr\/?\s*$/m.test(text);
 }
 
 export async function ensureBurrGitignore(root: string): Promise<"created" | "skipped"> {

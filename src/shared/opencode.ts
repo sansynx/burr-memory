@@ -1,23 +1,29 @@
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { writeInside } from "./fs.js";
+import { assertInside, BurrFsError, readInside, writeInside } from "./fs.js";
 
 export async function mergeOpenCodePlugin(
   root: string,
   file: string,
   plugin: string,
 ): Promise<"created" | "skipped"> {
-  const dest = join(root, file);
+  let dest: string;
+  try {
+    dest = assertInside(root, join(root, file));
+  } catch (error) {
+    if (error instanceof BurrFsError) return "skipped";
+    throw error;
+  }
   let data: Record<string, unknown>;
 
   try {
-    const parsed: unknown = JSON.parse(await readFile(dest, "utf8"));
+    const raw = await readInside(root, dest);
+    const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "skipped";
     data = parsed as Record<string, unknown>;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       data = {};
-    } else if (error instanceof SyntaxError) {
+    } else if (error instanceof SyntaxError || error instanceof BurrFsError) {
       return "skipped";
     } else {
       throw error;

@@ -2,9 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const packageRootCache = new Map<string, string>();
+
 export function findPackageRoot(
   start = dirname(fileURLToPath(import.meta.url)),
 ): string {
+  const cached = packageRootCache.get(start);
+  if (cached) return cached;
   let dir = start;
   for (let i = 0; i < 10; i += 1) {
     const pkg = join(dir, "package.json");
@@ -19,6 +23,7 @@ export function findPackageRoot(
           bin === "dist/cli/index.js" ||
           (typeof bin === "object" && bin !== null && "burr" in bin);
         if (hasBurrBin || parsed.name === "burr-memory") {
+          packageRootCache.set(start, dir);
           return dir;
         }
       } catch {
