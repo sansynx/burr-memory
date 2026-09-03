@@ -44,7 +44,7 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
   const created: string[] = [];
   const skipped: string[] = [];
 
-  const note = async (rel: string, result: "created" | "skipped") => {
+  const note = (rel: string, result: "created" | "skipped") => {
     const path = posix(rel);
     if (result === "created") created.push(path);
     else skipped.push(path);
@@ -52,20 +52,24 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
 
   const write = async (rel: string, data: string) => {
     const result = await writeIfMissing(root, join(root, rel), data);
-    await note(rel, result);
+    note(rel, result);
   };
 
-  const instructions = await readFile(join(pack, "templates", "instructions.md"), "utf8");
-  const config = await readFile(join(pack, "templates", "config.json"), "utf8");
-  const plugin = await readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8");
+  const [instructions, config, plugin, skillsData] = await Promise.all([
+    readFile(join(pack, "templates", "instructions.md"), "utf8"),
+    readFile(join(pack, "templates", "config.json"), "utf8"),
+    readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8"),
+    Promise.all(SKILLS.map((name) => readFile(join(pack, "skills", name, "SKILL.md"), "utf8"))),
+  ]);
 
   await write(".burr/config.json", config.endsWith("\n") ? config : `${config}\n`);
   await write(".burr/instructions.md", instructions.endsWith("\n") ? instructions : `${instructions}\n`);
   await write(".burr/usage.jsonl", "");
-  await note(".gitignore", await ensureBurrGitignore(root));
+  note(".gitignore", await ensureBurrGitignore(root));
 
-  for (const name of SKILLS) {
-    const skill = await readFile(join(pack, "skills", name, "SKILL.md"), "utf8");
+  for (let i = 0; i < SKILLS.length; i += 1) {
+    const name = SKILLS[i]!;
+    const skill = skillsData[i]!;
     for (const tree of [".burr/skills", ".claude/skills", ".agents/skills", ".pi/skills"]) {
       await write(`${tree}/${name}/SKILL.md`, skill);
     }

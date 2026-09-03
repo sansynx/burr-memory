@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { admitResolution, admitSignal } from "./admission.js";
 import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, TEXT_LIMIT, clip } from "./bounds.js";
@@ -22,7 +22,9 @@ function boundList(items: string[] | undefined, count: number, limit: number): s
 }
 
 function titleFrom(error: string, fallback: string): string {
-  const line = clip(error.split(/\r?\n/)[0], SHORT_LIMIT);
+  const newlineIndex = error.search(/\r?\n/);
+  const firstLine = newlineIndex === -1 ? error : error.slice(0, newlineIndex);
+  const line = clip(firstLine, SHORT_LIMIT);
   return line || fallback;
 }
 
@@ -170,7 +172,7 @@ async function writePromotedPlaybook(
   const write = async (filename: string) => {
     const result = await writeIfMissing(home, target(filename), markdown);
     if (result === "created") return true;
-    return (await readFile(target(filename), "utf8")) === markdown;
+    return (await readInside(home, target(filename)).catch(() => "")) === markdown;
   };
 
   if (await write(preferredFilename)) return preferredFilename;
@@ -283,16 +285,21 @@ export async function promotePlaybook(
 export async function setMode(root: string, mode: Mode): Promise<void> {
   await ensureStore(root);
   const dest = join(root, ".burr", "config.json");
-  let config: Record<string, unknown> = {};
+  const config: Record<string, unknown> = {};
   try {
     const parsed = JSON.parse(await readInside(root, dest)) as unknown;
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      config = parsed as Record<string, unknown>;
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+          config[key] = value;
+        }
+      }
     }
   } catch {
     // Replace malformed config with the known-safe shape.
   }
-  await writeInside(root, dest, `${JSON.stringify({ ...config, mode }, null, 2)}\n`);
+  config.mode = mode;
+  await writeInside(root, dest, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 export async function readMode(root: string): Promise<Mode> {
@@ -300,7 +307,9 @@ export async function readMode(root: string): Promise<Mode> {
     const config = JSON.parse(await readInside(root, join(root, ".burr", "config.json"))) as {
       mode?: string;
     };
-    if (config.mode === "on" || config.mode === "strict" || config.mode === "off") return config.mode;
+    if (config && (config.mode === "on" || config.mode === "strict" || config.mode === "off")) {
+      return config.mode;
+    }
   } catch {
     // default
   }
@@ -320,12 +329,18 @@ export async function status(root: string): Promise<{
       return 0;
     }
   };
-  const summary = await summarizeUsage(root);
+  const [mode, summary, userPlaybooks, projPlaybooks, userSignals, projSignals] = await Promise.all([
+    readMode(root),
+    summarizeUsage(root),
+    count(userPlaybooksDir()),
+    count(join(root, ".burr", "memory", "playbooks")),
+    count(userSignalsDir()),
+    count(join(root, ".burr", "memory", "signals")),
+  ]);
   return {
-    mode: await readMode(root),
-    playbooks:
-      (await count(userPlaybooksDir())) + (await count(join(root, ".burr", "memory", "playbooks"))),
-    signals: (await count(userSignalsDir())) + (await count(join(root, ".burr", "memory", "signals"))),
+    mode,
+    playbooks: userPlaybooks + projPlaybooks,
+    signals: userSignals + projSignals,
     lastHit: summary.lastHits[0]
       ? { ts: summary.lastHits[0].ts, path: summary.lastHits[0].path }
       : undefined,

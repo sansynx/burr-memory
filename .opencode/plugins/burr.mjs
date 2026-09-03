@@ -71,10 +71,11 @@ function loadMode(root) {
   return mode === "strict" || mode === "off" || mode === "on" ? mode : "on";
 }
 
-function loadInstructions(root) {
+function loadInstructions(root, mode) {
   const global = join(USER_HOME, ".config", "opencode", "burr-instructions.md");
   const instructions = readText(global) || DEFAULT_INSTRUCTIONS;
-  return loadMode(root) === "strict" ? `${instructions}${STRICT_INSTRUCTIONS}` : instructions;
+  const currentMode = mode || loadMode(root);
+  return currentMode === "strict" ? `${instructions}${STRICT_INSTRUCTIONS}` : instructions;
 }
 
 async function attachV2(ctx, root) {
@@ -91,8 +92,9 @@ async function attachV2(ctx, root) {
 
   if (typeof ctx?.session?.hook === "function") {
     await ctx.session.hook("context", (event) => {
-      if (loadMode(root) === "off") return;
-      const instructions = loadInstructions(root);
+      const mode = loadMode(root);
+      if (mode === "off") return;
+      const instructions = loadInstructions(root, mode);
       if (!instructions) return;
       if (Array.isArray(event.system)) event.system.push(instructions);
     });
@@ -109,8 +111,9 @@ export default async function burr(ctx) {
   return {
     command: COMMANDS,
     "experimental.chat.system.transform": async (_input, output) => {
-      if (loadMode(root) === "off") return;
-      const instructions = loadInstructions(root);
+      const mode = loadMode(root);
+      if (mode === "off") return;
+      const instructions = loadInstructions(root, mode);
       if (instructions && Array.isArray(output?.system)) {
         output.system.push(instructions);
       }

@@ -24,7 +24,9 @@ export function userMemoryRel(kind: "playbooks" | "signals", file: string): stri
 
 export async function ensureUserMemory(home?: string): Promise<string> {
   const root = memoryHome(home);
-  await mkdir(userPlaybooksDir(root), { recursive: true });
-  await mkdir(userSignalsDir(root), { recursive: true });
+  await Promise.all([
+    mkdir(userPlaybooksDir(root), { recursive: true }),
+    mkdir(userSignalsDir(root), { recursive: true }),
+  ]);
   return root;
 }

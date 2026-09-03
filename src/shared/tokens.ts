@@ -28,6 +28,7 @@ const STOP = new Set([
 ]);
 
 export function tokenize(text: string): string[] {
+  if (!text) return [];
   return text
     .toLowerCase()
     .split(/[^a-z0-9_]+/g)

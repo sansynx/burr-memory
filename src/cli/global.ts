@@ -95,17 +95,19 @@ export async function runGlobal(
     let result: "created" | "skipped";
     try {
       const existing = await readFile(dest, "utf8");
-      const hash = createHash("sha256")
-        .update(existing.replace(/\r\n/g, "\n"))
-        .digest("hex");
       if (existing.includes(MANAGED_MARKER)) {
         result = "skipped";
-      } else if (/burr-managed:\s*\d+/.test(existing) || knownLegacy.includes(hash)) {
-        await writeInside(home, dest, data);
-        result = "created";
       } else {
-        warnings.push(`  ~/${posix(rel)} (legacy or edited; replace manually)`);
-        result = "skipped";
+        const hash = createHash("sha256")
+          .update(existing.replace(/\r\n/g, "\n"))
+          .digest("hex");
+        if (/burr-managed:\s*\d+/.test(existing) || knownLegacy.includes(hash)) {
+          await writeInside(home, dest, data);
+          result = "created";
+        } else {
+          warnings.push(`  ~/${posix(rel)} (legacy or edited; replace manually)`);
+          result = "skipped";
+        }
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -114,8 +116,11 @@ export async function runGlobal(
     note(rel, result);
   };
 
-  const instructions = await readFile(join(pack, "templates", "global-instructions.md"), "utf8");
-  const plugin = await readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8");
+  const [instructions, plugin, skillsData] = await Promise.all([
+    readFile(join(pack, "templates", "global-instructions.md"), "utf8"),
+    readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8"),
+    Promise.all(SKILLS.map((name) => readFile(join(pack, "skills", name, "SKILL.md"), "utf8"))),
+  ]);
   const managedInstructions = `<!-- ${MANAGED_MARKER} -->\n${instructions}`;
   const cursor = `${CURSOR_FRONTMATTER}${managedInstructions}`;
   const windsurf = managedInstructions.endsWith("\n")
@@ -133,8 +138,9 @@ export async function runGlobal(
     ["ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9"],
   );
 
-  for (const name of SKILLS) {
-    const skill = await readFile(join(pack, "skills", name, "SKILL.md"), "utf8");
+  for (let i = 0; i < SKILLS.length; i += 1) {
+    const name = SKILLS[i]!;
+    const skill = skillsData[i]!;
     const managedSkill = markSkill(skill);
     await write(
       `.claude/skills/${name}/SKILL.md`,

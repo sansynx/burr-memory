@@ -85,10 +85,15 @@ function loadMode(root: string): "on" | "strict" | "off" {
   return "on";
 }
 
-function loadInstructions(root: string): string {
-  const packed = join(PACKAGE_ROOT, "templates", "instructions.md");
-  const instructions = readText(packed) || DEFAULT_INSTRUCTIONS;
-  return loadMode(root) === "strict" ? `${instructions}${STRICT_INSTRUCTIONS}` : instructions;
+let cachedInstructions: string | null = null;
+
+function loadInstructions(root: string, mode?: "on" | "strict" | "off"): string {
+  if (cachedInstructions === null) {
+    const packed = join(PACKAGE_ROOT, "templates", "instructions.md");
+    cachedInstructions = readText(packed) || DEFAULT_INSTRUCTIONS;
+  }
+  const currentMode = mode ?? loadMode(root);
+  return currentMode === "strict" ? `${cachedInstructions}${STRICT_INSTRUCTIONS}` : cachedInstructions;
 }
 
 export default function burr(pi: PiApi): void {
@@ -107,8 +112,9 @@ export default function burr(pi: PiApi): void {
 
   pi.on?.("before_agent_start", async (event, ctx) => {
     const root = projectRoot(ctx);
-    if (loadMode(root) === "off") return;
-    const instructions = loadInstructions(root);
+    const mode = loadMode(root);
+    if (mode === "off") return;
+    const instructions = loadInstructions(root, mode);
     if (!instructions) return;
     return {
       systemPrompt: `${event.systemPrompt ?? ""}\n\n${instructions}`.trim(),

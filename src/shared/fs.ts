@@ -59,7 +59,7 @@ async function assertCanonicalParent(root: string, target: string): Promise<void
   assertInside(canonicalRoot, resolve(canonicalParent, basename(target)));
 }
 
-async function assertUnlinkedFile(target: string): Promise<void> {
+async function assertUnlinkedFile(target: string) {
   const info = await lstat(target);
   if (!info.isFile() || info.isSymbolicLink()) {
     throw new BurrFsError(`Refusing non-file path: ${target}`);
@@ -67,6 +67,7 @@ async function assertUnlinkedFile(target: string): Promise<void> {
   if (info.nlink > 1) {
     throw new BurrFsError(`Refusing hard link: ${target}`);
   }
+  return info;
 }
 
 function isUnstablePathError(error: unknown): boolean {
@@ -172,8 +173,7 @@ export async function appendInside(root: string, target: string, data: string): 
 export async function readInside(root: string, target: string): Promise<string> {
   const dest = await guardedPath(root, target);
   await assertCanonicalParent(root, dest);
-  await assertUnlinkedFile(dest);
-  const before = await lstat(dest);
+  const before = await assertUnlinkedFile(dest);
   const handle = await open(dest, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     await assertCanonicalParent(root, dest);
