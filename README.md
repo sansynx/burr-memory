@@ -295,7 +295,7 @@ copies and adapters each tool expects.
 
 ## Multi-Session Benchmark: Progression Over Time
 
-Evaluated using **AO (Agent Orchestrator)** across four sequential GitHub repository tasks on an unindexed codebase:
+Evaluated across four sequential coding agent tasks on an unindexed GitHub repository codebase:
 
 ```text
 RUN       TASK                               CALLS      WASTED      LOOPS      MEMORY HITS      TIME
@@ -308,7 +308,7 @@ RUN       TASK                               CALLS      WASTED      LOOPS      M
 ### Measured Progression:
 - **80% drop in tool calls** by Run 4 as learned repository rules and tool strategies were reused.
 - **100% elimination of wasted calls and loops** after Run 1.
-- **75% memory hit rate** (Run 1 was cold start; Runs 2–4 retrieved relevant active rules).
+- **75% memory hit rate** (Run 1 was cold start; Runs 2 to 4 retrieved relevant active rules).
 - **Strictly bounded memory:** Stored active memories remained fixed at 5 items (<12 KB storage).
 
 ---

@@ -59,7 +59,7 @@ Next fresh agent session inherits proven playbooks & strategies!
 ## System Architecture
 
 <p align="center">
-  <img src="assets/burr-architecture.svg" alt="Burr Architecture: Deterministic Loop Guard & Shared Memory Runtime" width="100%">
+  <img src="assets/burr-architecture.svg" alt="Burr Architecture: Deterministic Loop Guard and Shared Memory Runtime" width="100%">
 </p>
 
 ```text

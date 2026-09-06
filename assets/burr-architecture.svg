@@ -1,4 +1,4 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 660" width="100%" height="100%" role="img" aria-label="Burr Architecture and Runtime Loop Guard">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 660" width="1140" height="660" role="img" aria-label="Burr Architecture and Runtime Loop Guard">
   <defs>
     <!-- Background Gradient -->
     <radialGradient id="bgGrad" cx="50%" cy="30%" r="80%">
@@ -55,7 +55,7 @@
 
   <rect x="910" y="28" width="194" height="28" rx="14" fill="#141416" stroke="#26262A"/>
   <circle cx="924" cy="42" r="4" fill="#22C55E"/>
-  <text x="936" y="46" fill="#A1A1AA" font-family="'SF Mono', ui-monospace, Menlo, monospace" font-size="10" font-weight="600">ZERO CLOUD &bull; LOCAL ONLY</text>
+  <text x="936" y="46" fill="#A1A1AA" font-family="'SF Mono', ui-monospace, Menlo, monospace" font-size="10" font-weight="600">ZERO CLOUD &#x2022; LOCAL ONLY</text>
 
   <!-- ======================================================================
        FLOW LANES: LEFT (RUN TIME GUARD) & RIGHT (MEMORY LIFECYCLE)
@@ -118,7 +118,7 @@
       <text x="210" y="16" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+40</text>
 
       <rect y="28" width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
-      <text x="10" y="44" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Fuzzy Jaccard (&ge; 0.85)</text>
+      <text x="10" y="44" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Fuzzy Jaccard (&gt;= 0.85)</text>
       <text x="210" y="44" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+25</text>
 
       <rect y="56" width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
@@ -130,7 +130,7 @@
       <text x="210" y="100" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+20</text>
 
       <rect y="112" width="242" height="28" rx="4" fill="#22110A" stroke="rgba(255,90,31,0.4)"/>
-      <text x="8" y="130" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="10" font-weight="700">&ge; 70 &rarr; HARD BLOCK &amp; REDIRECT</text>
+      <text x="8" y="130" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="10" font-weight="700">&gt;= 70 &#x2192; HARD BLOCK &amp; REDIRECT</text>
     </g>
   </g>
 
@@ -172,7 +172,7 @@
     <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">Mandatory Proof Requirement</text>
 
     <rect x="14" y="60" width="232" height="34" rx="4" fill="#06140A" stroke="rgba(34,197,94,0.3)"/>
-    <text x="22" y="81" fill="#22C55E" font-family="'SF Mono', monospace" font-size="10" font-weight="600">&check; npm test: 100% Green (Verified)</text>
+    <text x="22" y="81" fill="#22C55E" font-family="'SF Mono', monospace" font-size="10" font-weight="600">&#x2713; npm test: 100% Green (Verified)</text>
   </g>
 
   <!-- ======================================================================
@@ -186,8 +186,8 @@
     <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">admitCandidate(cand, store)</text>
 
     <rect x="14" y="60" width="207" height="40" rx="4" fill="#050505" stroke="#1A1A1C"/>
-    <text x="20" y="76" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&bull; Rejects ephemeral noise</text>
-    <text x="20" y="90" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&bull; Merges near-duplicates</text>
+    <text x="20" y="76" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&#x2022; Rejects ephemeral noise</text>
+    <text x="20" y="90" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&#x2022; Merges near-duplicates</text>
   </g>
 
   <!-- ======================================================================
@@ -203,9 +203,9 @@
     <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">~/.burr/memory/</text>
 
     <g transform="translate(14, 58)">
-      <text y="14" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; playbooks/*.md</text>
-      <text y="28" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; signals/*.json</text>
-      <text y="42" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; knowledge/*.json</text>
+      <text y="14" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&#x2022; playbooks/*.md</text>
+      <text y="28" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&#x2022; signals/*.json</text>
+      <text y="42" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&#x2022; knowledge/*.json</text>
       <text y="56" fill="#22C55E" font-family="'SF Mono', monospace" font-size="9" font-weight="600">Cross-Repo Instant Reuse</text>
     </g>
   </g>
@@ -236,6 +236,6 @@
   </g>
 
   <!-- Bottom Return Loop Callout -->
-  <text x="360" y="612" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">&larr; Learned Playbook Reused on Turn 1 across any repository on this machine</text>
+  <text x="360" y="612" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">&#x2190; Learned Playbook Reused on Turn 1 across any repository on this machine</text>
 
 </svg>

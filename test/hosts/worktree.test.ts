@@ -11,17 +11,17 @@ import {
 } from "../../src/codex/hooks.js";
 import { SKILL_NAMES } from "../helpers.js";
 
-describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
+describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
   let homeDir: string;
   let mainRepoDir: string;
   let worktreeADir: string;
   let worktreeBDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "burr-ao-home-"));
-    mainRepoDir = await mkdtemp(join(tmpdir(), "burr-ao-repo-"));
-    worktreeADir = await mkdtemp(join(tmpdir(), "burr-ao-worktree-a-"));
-    worktreeBDir = await mkdtemp(join(tmpdir(), "burr-ao-worktree-b-"));
+    homeDir = await mkdtemp(join(tmpdir(), "burr-wt-home-"));
+    mainRepoDir = await mkdtemp(join(tmpdir(), "burr-wt-repo-"));
+    worktreeADir = await mkdtemp(join(tmpdir(), "burr-wt-worktree-a-"));
+    worktreeBDir = await mkdtemp(join(tmpdir(), "burr-wt-worktree-b-"));
   });
 
   afterEach(async () => {
@@ -32,7 +32,7 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
     await rm(worktreeBDir, opts);
   });
 
-  it("exposes all Burr skills in .agents/skills/ matching AO skill discovery structure", async () => {
+  it("exposes all Burr skills in .agents/skills/ matching standard agent skill discovery structure", async () => {
     await runInit(mainRepoDir);
 
     for (const name of SKILL_NAMES) {
@@ -43,13 +43,13 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
     }
   });
 
-  it("shares learned memory across isolated AO git worktrees", async () => {
+  it("shares learned memory across isolated git worktrees", async () => {
     await runInit(worktreeADir);
     await runInit(worktreeBDir);
 
     const repoSlug = "sansynx/burr-memory";
 
-    const sessionAId = "ao-worktree-a-task-1";
+    const sessionAId = "agent-worktree-a-task-1";
     const startA = await handleSessionStart(
       {
         sessionId: sessionAId,
@@ -88,7 +88,7 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
     expect(endA.verified).toBe(true);
     expect(endA.memoriesPromoted).toBeGreaterThan(0);
 
-    const sessionBId = "ao-worktree-b-task-2";
+    const sessionBId = "agent-worktree-b-task-2";
     const startB = await handleSessionStart(
       {
         sessionId: sessionBId,
@@ -104,9 +104,9 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
     expect(startB.injectedPrompt).toContain("Run npm run build to generate dist/ output before test suite");
   }, 20000);
 
-  it("intercepts and blocks repetitive loop cycles in AO agent sessions", async () => {
+  it("intercepts and blocks repetitive loop cycles in agent sessions", async () => {
     await runInit(worktreeADir);
-    const sessionId = "ao-worktree-loop-test";
+    const sessionId = "agent-worktree-loop-test";
 
     await handleSessionStart(
       {

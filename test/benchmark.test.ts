@@ -29,7 +29,7 @@ describe("Burr Benchmark: Multi-Session Learning Progression", () => {
     // =========================================================================
     // TASK 1: Cold start - Module Resolution Failure in Monorepo
     // =========================================================================
-    const session1Id = "ao-sess-task1-monorepo-resolver";
+    const session1Id = "agent-sess-task1-monorepo-resolver";
     const start1 = await handleSessionStart(
       {
         sessionId: session1Id,
@@ -104,7 +104,7 @@ describe("Burr Benchmark: Multi-Session Learning Progression", () => {
     // =========================================================================
     // TASK 2: Fresh Context - Circular Dependency in CLI Commands
     // =========================================================================
-    const session2Id = "ao-sess-task2-circular-dep";
+    const session2Id = "agent-sess-task2-circular-dep";
     const start2 = await handleSessionStart(
       {
         sessionId: session2Id,
@@ -152,7 +152,7 @@ describe("Burr Benchmark: Multi-Session Learning Progression", () => {
     // =========================================================================
     // TASK 3: Targeted Filesystem Path Containment
     // =========================================================================
-    const session3Id = "ao-sess-task3-path-containment";
+    const session3Id = "agent-sess-task3-path-containment";
     const start3 = await handleSessionStart(
       {
         sessionId: session3Id,
@@ -190,7 +190,7 @@ describe("Burr Benchmark: Multi-Session Learning Progression", () => {
     // =========================================================================
     // TASK 4: Mature Memory - Diagnostic Doctor Check
     // =========================================================================
-    const session4Id = "ao-sess-task4-doctor-integrity";
+    const session4Id = "agent-sess-task4-doctor-integrity";
     const start4 = await handleSessionStart(
       {
         sessionId: session4Id,
