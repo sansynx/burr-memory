@@ -13,8 +13,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F4EEE7?style=flat&labelColor=0F0F0E" alt="MIT license"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18-F4EEE7?style=flat&labelColor=0F0F0E" alt="Node 18+"></a>
   <a href="https://www.npmjs.com/package/burr-memory"><img src="https://img.shields.io/npm/v/burr-memory?style=flat&label=npm&labelColor=0F0F0E&color=FF5A1F" alt="npm version"></a>
+  <a href="https://sansynx.github.io/burr-site/"><img src="https://img.shields.io/badge/docs-website-FF5A1F?style=flat&labelColor=0F0F0E" alt="Documentation & Showcase"></a>
   <img src="https://img.shields.io/badge/cloud-none-F4EEE7?style=flat&labelColor=0F0F0E" alt="No cloud">
 </p>
+
+> **Showcase & Interactive Documentation**: [https://sansynx.github.io/burr-site/](https://sansynx.github.io/burr-site/)
 
 ```bash
 npm install -g burr-memory
@@ -47,7 +50,7 @@ your-project/
     skills/                  owned copies of the seven commands
 ```
 
-If you resolve a Prisma singleton bug in `shop`, the next agent in `billing` — or a compacted session in `shop` — searches `~/.burr/memory/` and rides that playbook. `burr global` writes editor rules under your home directory. Capture and resolve write the memory there too.
+If you resolve a Prisma singleton bug in `shop`, the next agent in `billing` (or a compacted session in `shop`) searches `~/.burr/memory/` and rides that playbook. `burr global` writes editor rules under your home directory. Capture and resolve write the memory there too.
 
 ---
 
@@ -82,6 +85,10 @@ Burr bridges this gap by persisting verified lessons into structured machine-loc
 ---
 
 ## High-Level Architecture
+
+<p align="center">
+  <img src="assets/burr-architecture.svg" alt="Burr System Architecture: Deterministic Loop Guard and Shared Memory Runtime" width="100%">
+</p>
 
 ```text
                CODING AGENTS & ORCHESTRATORS
@@ -160,11 +167,39 @@ Unrestricted agent memory quickly degrades. Burr enforces strict admission and d
 
 1. **Ephemeral Noise Rejection:** Temporary environment quirks (port in use, down dev server, missing local unbuilt build artifact) are discarded immediately and never promoted.
 2. **Mandatory Verification Gate:** A candidate lesson is never promoted to long-term memory unless the fix was explicitly verified with a passing test, compiler run, or reproduction check.
-3. **Deduplication & Merging:** If a newly learned strategy matches an existing memory, Burr merges them—updating the observation count and confidence score rather than adding duplicate entries.
+3. **Deduplication & Merging:** If a newly learned strategy matches an existing memory, Burr merges them: updating the observation count and confidence score rather than adding duplicate entries.
 4. **Autonomous Memory Decay & Pruning:**
    - Active memories unused for 30 days degrade to `stale` with retrieval score penalties.
    - After 60 days of inactivity, stale memories are archived.
-   - Ephemeral session ledgers (`runs/`) are pruned automatically after a 3–7 day TTL.
+   - Ephemeral session ledgers (`runs/`) are pruned automatically after a 3 to 7 day TTL.
+
+---
+
+## Programmatic Node API
+
+Burr exports clean runtime classes and functions for direct integration into agent loops, harnesses, or test harnesses:
+
+```typescript
+import {
+  LoopDetector,
+  detectActionLoop,
+  retrieveMemories,
+  reflectOnSession,
+  admitCandidate,
+  consolidateMemories,
+} from "burr-memory";
+
+// Initialize the deterministic loop detector
+const detector = new LoopDetector();
+
+// Evaluate a proposed tool action before execution
+const check = detector.evaluateAction("run_command", { cmd: "npm test" });
+
+if (check.blocked) {
+  console.warn("Action halted by Burr Loop Guard:", check.reasons);
+  console.info("Suggested redirection:", check.suggestedAction);
+}
+```
 
 ---
 
@@ -222,7 +257,7 @@ CLI commands:
 burr init
 burr search "hydration mismatch"
 burr capture --error "TypeError: ..." --command "npm test"
-burr resolve --error "..." --cause "..." --fix "..." --verify "npm test — 12 passed"
+burr resolve --error "..." --cause "..." --fix "..." --verify "npm test (12 passed)"
 burr promote
 burr audit
 burr on | strict | off

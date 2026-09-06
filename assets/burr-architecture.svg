@@ -1,0 +1,241 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 660" width="100%" height="100%" role="img" aria-label="Burr Architecture and Runtime Loop Guard">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#121214"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </radialGradient>
+
+    <!-- Ember Glow -->
+    <filter id="emberGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Green Glow -->
+    <filter id="greenGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="1140" height="660" fill="url(#bgGrad)"/>
+  <rect width="1140" height="660" fill="none" stroke="#1A1A1C" stroke-width="2"/>
+
+  <!-- Subtle Grid Dots -->
+  <pattern id="dotPattern" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+    <circle cx="2" cy="2" r="1" fill="#26262A" opacity="0.4"/>
+  </pattern>
+  <rect width="1140" height="660" fill="url(#dotPattern)"/>
+
+  <!-- ======================================================================
+       HEADER
+       ====================================================================== -->
+  <!-- Burr Mark Logo -->
+  <g transform="translate(36, 26) scale(0.26)">
+    <rect width="128" height="128" rx="16" fill="#0F0F0E" stroke="#2A2A2E" stroke-width="2"/>
+    <g transform="translate(64, 64)">
+      <g fill="#F4EEE7">
+        <path transform="rotate(15)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(105)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(150)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(195)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(240)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(285)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+        <path transform="rotate(60)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      </g>
+      <path transform="rotate(330)" fill="#FF5A1F" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
+      <circle r="17.5" fill="#F4EEE7"/>
+    </g>
+  </g>
+
+  <text x="80" y="44" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="800" letter-spacing="-0.02em">Burr Architecture</text>
+  <text x="80" y="62" fill="#8E8E93" font-family="'SF Mono', ui-monospace, Menlo, Consolas, monospace" font-size="11">Deterministic Loop Guard &amp; Shared Memory Runtime (100% Offline)</text>
+
+  <rect x="910" y="28" width="194" height="28" rx="14" fill="#141416" stroke="#26262A"/>
+  <circle cx="924" cy="42" r="4" fill="#22C55E"/>
+  <text x="936" y="46" fill="#A1A1AA" font-family="'SF Mono', ui-monospace, Menlo, monospace" font-size="10" font-weight="600">ZERO CLOUD &bull; LOCAL ONLY</text>
+
+  <!-- ======================================================================
+       FLOW LANES: LEFT (RUN TIME GUARD) & RIGHT (MEMORY LIFECYCLE)
+       ====================================================================== -->
+
+  <!-- Flow Arrows connecting stages -->
+  <g fill="none" stroke="#2A2A2E" stroke-width="1.8">
+    <!-- Agent to Guard -->
+    <path d="M260 165 H300"/>
+    <!-- Guard to Execution -->
+    <path d="M570 165 H610"/>
+    <!-- Execution to Proof -->
+    <path d="M740 230 V270"/>
+    <!-- Proof to Admission -->
+    <path d="M740 375 V415"/>
+    <!-- Admission to Store -->
+    <path d="M845 470 H895"/>
+    <!-- Feedback Loop: Store back to Agent Session -->
+    <path d="M990 535 V595 H150 V230" stroke="#FF5A1F" stroke-dasharray="5 5" opacity="0.8"/>
+  </g>
+  <polygon points="300,165 292,160 292,170" fill="#2A2A2E"/>
+  <polygon points="610,165 602,160 602,170" fill="#2A2A2E"/>
+  <polygon points="740,270 735,262 745,262" fill="#2A2A2E"/>
+  <polygon points="740,415 735,407 745,407" fill="#2A2A2E"/>
+  <polygon points="895,470 887,465 887,475" fill="#2A2A2E"/>
+  <polygon points="150,230 145,238 155,238" fill="#FF5A1F"/>
+
+  <!-- ======================================================================
+       STAGE 1: AGENT TOOL PROPOSAL
+       ====================================================================== -->
+  <g transform="translate(36, 100)">
+    <rect width="224" height="130" rx="8" fill="#0C0C0D" stroke="#1F1F23" stroke-width="1.5"/>
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#18181B"/>
+    <text x="21" y="29" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">01</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Coding Agent</text>
+    <text x="14" y="52" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">Claude / Codex / OpenCode</text>
+
+    <!-- Sub items -->
+    <rect x="14" y="64" width="196" height="52" rx="4" fill="#050505" stroke="#1A1A1C"/>
+    <text x="22" y="82" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="10">Action: <tspan fill="#F4EFEA">run_command</tspan></text>
+    <text x="22" y="100" fill="#71717A" font-family="'SF Mono', monospace" font-size="9">args: { cmd: "npm test" }</text>
+  </g>
+
+  <!-- ======================================================================
+       STAGE 2: DETERMINISTIC LOOP GUARD (THE ENGINE)
+       ====================================================================== -->
+  <g transform="translate(300, 100)">
+    <rect width="270" height="230" rx="8" fill="#0C0C0D" stroke="#FF5A1F" stroke-width="1.6" filter="url(#emberGlow)"/>
+    <rect width="270" height="230" rx="8" fill="#0C0C0D" stroke="#FF5A1F" stroke-width="1.6"/>
+    
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#24120A"/>
+    <text x="21" y="29" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">02</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">LoopDetector</text>
+    <text x="14" y="52" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">evaluateAction(tool, args)</text>
+
+    <!-- Mathematical Detectors Matrix -->
+    <g transform="translate(14, 62)">
+      <rect width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
+      <text x="10" y="16" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Exact Repetition (SHA-256)</text>
+      <text x="210" y="16" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+40</text>
+
+      <rect y="28" width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
+      <text x="10" y="44" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Fuzzy Jaccard (&ge; 0.85)</text>
+      <text x="210" y="44" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+25</text>
+
+      <rect y="56" width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
+      <text x="10" y="72" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Subsequence Cycle (k: 2..6)</text>
+      <text x="210" y="72" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+30</text>
+
+      <rect y="84" width="242" height="24" rx="3" fill="#141416" stroke="#222226"/>
+      <text x="10" y="100" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">Output Stagnation</text>
+      <text x="210" y="100" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="9" font-weight="700">+20</text>
+
+      <rect y="112" width="242" height="28" rx="4" fill="#22110A" stroke="rgba(255,90,31,0.4)"/>
+      <text x="8" y="130" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="10" font-weight="700">&ge; 70 &rarr; HARD BLOCK &amp; REDIRECT</text>
+    </g>
+  </g>
+
+  <!-- Hard Block Redirection Branch (Downwards from Loop Guard) -->
+  <g transform="translate(300, 350)">
+    <path d="M135 -20 V30" fill="none" stroke="#EF4444" stroke-width="1.8" stroke-dasharray="3 3"/>
+    <polygon points="135,30 130,22 140,22" fill="#EF4444"/>
+    
+    <rect width="270" height="90" rx="6" fill="#140A0A" stroke="#EF4444" stroke-width="1.2"/>
+    <text x="14" y="24" fill="#EF4444" font-family="'SF Mono', monospace" font-size="10" font-weight="700">[ACTION BLOCKED: TURN 4]</text>
+    <text x="14" y="44" fill="#F4EFEA" font-family="'SF Mono', monospace" font-size="9.5">Loop Guard halts repeating call</text>
+    <text x="14" y="62" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">Injects Advice: "Run 'npm run build'</text>
+    <text x="14" y="76" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">before repeating test execution"</text>
+  </g>
+
+  <!-- ======================================================================
+       STAGE 3: EXECUTION & TOOL ACTION LEDGER
+       ====================================================================== -->
+  <g transform="translate(610, 100)">
+    <rect width="260" height="130" rx="8" fill="#0C0C0D" stroke="#1F1F23" stroke-width="1.5"/>
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#18181B"/>
+    <text x="21" y="29" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">03</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Action Execution</text>
+    <text x="14" y="52" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">Local Subprocess / Tools</text>
+
+    <rect x="14" y="64" width="232" height="52" rx="4" fill="#050505" stroke="#1A1A1C"/>
+    <text x="22" y="82" fill="#22C55E" font-family="'SF Mono', monospace" font-size="10">Built dist/index.js (3.4 KB)</text>
+    <text x="22" y="100" fill="#71717A" font-family="'SF Mono', monospace" font-size="9">Fingerprint: sha256(stdout)[0..16]</text>
+  </g>
+
+  <!-- ======================================================================
+       STAGE 4: VERIFICATION PROOF GATE
+       ====================================================================== -->
+  <g transform="translate(610, 270)">
+    <rect width="260" height="105" rx="8" fill="#0C0C0D" stroke="#1F1F23" stroke-width="1.5"/>
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#18181B"/>
+    <text x="21" y="29" fill="#22C55E" font-family="'SF Mono', monospace" font-size="11" font-weight="700">04</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Verification Gate</text>
+    <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">Mandatory Proof Requirement</text>
+
+    <rect x="14" y="60" width="232" height="34" rx="4" fill="#06140A" stroke="rgba(34,197,94,0.3)"/>
+    <text x="22" y="81" fill="#22C55E" font-family="'SF Mono', monospace" font-size="10" font-weight="600">&check; npm test: 100% Green (Verified)</text>
+  </g>
+
+  <!-- ======================================================================
+       STAGE 5: ADMISSION & DEDUPLICATION
+       ====================================================================== -->
+  <g transform="translate(610, 415)">
+    <rect width="235" height="110" rx="8" fill="#0C0C0D" stroke="#1F1F23" stroke-width="1.5"/>
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#18181B"/>
+    <text x="21" y="29" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">05</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Admission Gate</text>
+    <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">admitCandidate(cand, store)</text>
+
+    <rect x="14" y="60" width="207" height="40" rx="4" fill="#050505" stroke="#1A1A1C"/>
+    <text x="20" y="76" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&bull; Rejects ephemeral noise</text>
+    <text x="20" y="90" fill="#A1A1AA" font-family="'SF Mono', monospace" font-size="9">&bull; Merges near-duplicates</text>
+  </g>
+
+  <!-- ======================================================================
+       STAGE 6: SHARED MACHINE MEMORY (~/.burr/memory/)
+       ====================================================================== -->
+  <g transform="translate(895, 415)">
+    <rect width="205" height="120" rx="8" fill="#0C0C0D" stroke="#22C55E" stroke-width="1.5" filter="url(#greenGlow)"/>
+    <rect width="205" height="120" rx="8" fill="#0C0C0D" stroke="#22C55E" stroke-width="1.5"/>
+
+    <rect x="14" y="14" width="22" height="22" rx="4" fill="#0A1F0F"/>
+    <text x="21" y="29" fill="#22C55E" font-family="'SF Mono', monospace" font-size="11" font-weight="700">06</text>
+    <text x="44" y="30" fill="#F4EFEA" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Shared Store</text>
+    <text x="14" y="50" fill="#8E8E93" font-family="'SF Mono', monospace" font-size="10">~/.burr/memory/</text>
+
+    <g transform="translate(14, 58)">
+      <text y="14" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; playbooks/*.md</text>
+      <text y="28" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; signals/*.json</text>
+      <text y="42" fill="#D4D4D8" font-family="'SF Mono', monospace" font-size="9">&bull; knowledge/*.json</text>
+      <text y="56" fill="#22C55E" font-family="'SF Mono', monospace" font-size="9" font-weight="600">Cross-Repo Instant Reuse</text>
+    </g>
+  </g>
+
+  <!-- ======================================================================
+       CODE EMBED CARD: PROGRAMMATIC NODE API
+       ====================================================================== -->
+  <g transform="translate(36, 455)">
+    <rect width="534" height="165" rx="8" fill="#080809" stroke="#1F1F23" stroke-width="1.5"/>
+    
+    <!-- Window Bar -->
+    <rect width="534" height="28" rx="8" fill="#121214"/>
+    <rect y="20" width="534" height="8" fill="#121214"/>
+    <circle cx="16" cy="14" r="4" fill="#27272A"/>
+    <circle cx="28" cy="14" r="4" fill="#27272A"/>
+    <circle cx="40" cy="14" r="4" fill="#27272A"/>
+    <text x="56" y="18" fill="#71717A" font-family="'SF Mono', monospace" font-size="10">programmatic-agent-integration.ts</text>
+
+    <g transform="translate(16, 42)" font-family="'SF Mono', ui-monospace, Menlo, monospace" font-size="10" line-height="1.4">
+      <text y="0" fill="#8E8E93"><tspan fill="#FF5A1F">import</tspan> { LoopDetector, retrieveMemories } <tspan fill="#FF5A1F">from</tspan> <tspan fill="#22C55E">"burr-memory"</tspan>;</text>
+      <text y="20" fill="#8E8E93"><tspan fill="#FF5A1F">const</tspan> detector = <tspan fill="#FF5A1F">new</tspan> LoopDetector();</text>
+      <text y="42" fill="#71717A">// Intercept proposed tool actions before execution</text>
+      <text y="60" fill="#8E8E93"><tspan fill="#FF5A1F">const</tspan> check = detector.<tspan fill="#F4EFEA">evaluateAction</tspan>(<tspan fill="#22C55E">"run_command"</tspan>, { cmd: <tspan fill="#22C55E">"npm test"</tspan> });</text>
+      <text y="82" fill="#8E8E93"><tspan fill="#FF5A1F">if</tspan> (check.blocked) {</text>
+      <text y="100" fill="#EF4444">  console.warn("Halted by Burr Loop Guard:", check.reasons);</text>
+      <text y="116" fill="#8E8E93">}</text>
+    </g>
+  </g>
+
+  <!-- Bottom Return Loop Callout -->
+  <text x="360" y="612" fill="#FF5A1F" font-family="'SF Mono', monospace" font-size="11" font-weight="700">&larr; Learned Playbook Reused on Turn 1 across any repository on this machine</text>
+
+</svg>

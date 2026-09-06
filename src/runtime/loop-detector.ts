@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { clip } from "../shared/bounds.js";
 import { tokenize } from "../shared/tokens.js";
 import type { BurrAction, LoopDetectionResult, LoopRiskLevel, RuntimeConfig } from "../shared/types.js";
+import { DEFAULT_RUNTIME_CONFIG } from "../shared/config.js";
 
 export function canonicalize(val: unknown): unknown {
   if (val === null || val === undefined) return null;
@@ -245,4 +246,127 @@ export function evaluateLoopRisk(
       stagnantOutputsCount: stagnation.count,
     },
   };
+}
+
+export function detectActionLoop(
+  tool: string,
+  args: unknown,
+  recentActions: BurrAction[],
+  config: Partial<RuntimeConfig> = {},
+): {
+  blocked: boolean;
+  score: number;
+  level: LoopRiskLevel;
+  reasons: string[];
+  suggestedAction?: string;
+  details?: Record<string, unknown>;
+} {
+  const mergedConfig: RuntimeConfig = {
+    ...DEFAULT_RUNTIME_CONFIG,
+    ...config,
+  };
+  const result = evaluateLoopRisk(tool, args, recentActions, mergedConfig);
+  const blocked = result.level === "block";
+
+  let suggestedAction: string | undefined;
+  if (blocked) {
+    if (result.reasons.includes("exact-repeat")) {
+      suggestedAction = `Halt repeated ${tool} execution. Modify arguments or inspect environment before retrying.`;
+    } else if (result.reasons.includes("cycle")) {
+      suggestedAction = `Break cyclic tool pattern. Switch to a different diagnostic or build strategy.`;
+    } else if (result.reasons.includes("output-stagnation")) {
+      suggestedAction = `Output is stagnant with zero forward progress. Step back and re-evaluate the hypothesis.`;
+    } else {
+      suggestedAction = `Halt repeating execution trajectory. Pivot to an alternative approach.`;
+    }
+  } else if (result.level === "warn") {
+    suggestedAction = `Warning: repetitive pattern detected (risk score ${result.score}/100). Consider alternative actions.`;
+  }
+
+  return {
+    blocked,
+    score: result.score,
+    level: result.level,
+    reasons: result.reasons,
+    suggestedAction,
+    details: result.details,
+  };
+}
+
+export interface LoopDetectorOptions {
+  config?: Partial<RuntimeConfig>;
+  autoRecord?: boolean;
+}
+
+export class LoopDetector {
+  private actions: BurrAction[] = [];
+  private config: RuntimeConfig;
+  private autoRecord: boolean;
+
+  constructor(options: LoopDetectorOptions | Partial<RuntimeConfig> = {}) {
+    const opts = "config" in options || "autoRecord" in options
+      ? (options as LoopDetectorOptions)
+      : { config: options as Partial<RuntimeConfig> };
+    this.config = {
+      ...DEFAULT_RUNTIME_CONFIG,
+      ...opts.config,
+    };
+    this.autoRecord = opts.autoRecord ?? true;
+  }
+
+  evaluateAction(
+    tool: string,
+    args: unknown,
+    options: { recentFailedVerify?: boolean; record?: boolean } = {},
+  ): {
+    blocked: boolean;
+    score: number;
+    level: LoopRiskLevel;
+    reasons: string[];
+    suggestedAction?: string;
+    details?: Record<string, unknown>;
+  } {
+    const res = detectActionLoop(tool, args, this.actions, this.config);
+    const shouldRecord = options.record ?? this.autoRecord;
+    if (shouldRecord) {
+      this.recordAction(tool, args, undefined, res.blocked ? "failed" : "completed");
+    }
+    return res;
+  }
+
+  recordAction(
+    tool: string,
+    args: unknown,
+    output?: unknown,
+    status: "completed" | "failed" = "completed",
+  ): void {
+    const inFp = fingerprintInput(tool, args);
+    const outFp = output !== undefined ? fingerprintOutput(output) : undefined;
+    this.actions.push({
+      sessionId: "default",
+      sequence: this.actions.length + 1,
+      timestamp: new Date().toISOString(),
+      harness: "generic",
+      tool,
+      normalizedArgs: args,
+      inputFingerprint: inFp,
+      outputFingerprint: outFp,
+      status,
+    });
+    if (this.actions.length > 50) {
+      this.actions = this.actions.slice(-50);
+    }
+  }
+
+  getRecentActions(): BurrAction[] {
+    return [...this.actions];
+  }
+
+  clear(): void {
+    this.actions = [];
+  }
+
+  reset(): void {
+    this.clear();
+  }
 }

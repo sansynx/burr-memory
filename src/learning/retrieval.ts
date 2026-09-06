@@ -141,3 +141,5 @@ export function formatRetrievedMemoriesForContext(memories: RetrievedMemory[]): 
   lines.push("<!-- end-burr:active-memory -->");
   return lines.join("\n");
 }
+
+export const retrieveMemories = retrieveRelevantMemories;

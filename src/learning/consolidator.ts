@@ -5,6 +5,7 @@ import { userHome } from "../shared/home.js";
 import { renderPlaybook } from "../shared/playbook.js";
 import { redact } from "../shared/redaction.js";
 import type { CandidateLesson, MemoryItem } from "../shared/types.js";
+import { evaluateCandidateAdmission } from "./admission.js";
 import {
   ensureUserMemory,
   userArchiveDir,
@@ -334,4 +335,33 @@ export async function applyMemoryDecayAndPruning(
   }
 
   return { staled, archived, pruned };
+}
+
+export async function consolidateMemories(
+  home?: string,
+): Promise<{ promoted: number; merged: number; discarded: number }> {
+  const resolvedHome = home ?? userHome();
+  const candidates = await listCandidates(resolvedHome);
+  const existing = await listAllMemories(resolvedHome);
+
+  let promoted = 0;
+  let merged = 0;
+  let discarded = 0;
+
+  for (const candidate of candidates) {
+    const decision = evaluateCandidateAdmission(candidate, existing);
+    if (decision.decision === "promote") {
+      const item = await promoteCandidate(candidate, resolvedHome);
+      existing.push(item);
+      promoted += 1;
+    } else if (decision.decision === "merge" && decision.targetMemoryId) {
+      await mergeCandidate(candidate, decision.targetMemoryId, resolvedHome);
+      merged += 1;
+    } else {
+      await deleteCandidate(candidate.id, resolvedHome);
+      discarded += 1;
+    }
+  }
+
+  return { promoted, merged, discarded };
 }

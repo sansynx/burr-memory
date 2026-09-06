@@ -82,3 +82,5 @@ export function evaluateCandidateAdmission(
     reason: "verified-novel-lesson",
   };
 }
+
+export const admitCandidate = evaluateCandidateAdmission;

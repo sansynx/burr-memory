@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli/index.js";
 import { captureSignal, promotePlaybook, resolvePlaybook, runSearch } from "../src/shared/memory.js";
 import { appendUsage, readUsage } from "../src/shared/ledger.js";
+import {
+  LoopDetector,
+  detectActionLoop,
+  retrieveMemories,
+  admitCandidate,
+  consolidateMemories,
+  reflectOnSession,
+} from "../src/index.js";
 import { withTempDir } from "./helpers.js";
 
 const previousHome = process.env.BURR_HOME;
@@ -327,5 +335,24 @@ describe("cli resolve is shared", () => {
         expect(logs.join("\n")).toMatch(/~\/\.burr\/memory\/playbooks\/.+\.md/);
       });
     });
+  });
+
+  it("exports LoopDetector and correctly evaluates actions", () => {
+    expect(typeof LoopDetector).toBe("function");
+    expect(typeof detectActionLoop).toBe("function");
+    expect(typeof retrieveMemories).toBe("function");
+    expect(typeof admitCandidate).toBe("function");
+    expect(typeof consolidateMemories).toBe("function");
+    expect(typeof reflectOnSession).toBe("function");
+
+    const detector = new LoopDetector();
+    const first = detector.evaluateAction("run_command", { cmd: "npm test" });
+    expect(first.blocked).toBe(false);
+    expect(first.score).toBe(0);
+
+    detector.recordAction("run_command", { cmd: "npm test" }, "FAIL 1", "failed");
+    detector.recordAction("run_command", { cmd: "npm test" }, "FAIL 1", "failed");
+    const check = detector.evaluateAction("run_command", { cmd: "npm test" });
+    expect(check.reasons).toContain("exact-repeat");
   });
 });

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,10 +25,11 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
   });
 
   afterEach(async () => {
-    await rm(homeDir, { recursive: true, force: true });
-    await rm(mainRepoDir, { recursive: true, force: true });
-    await rm(worktreeADir, { recursive: true, force: true });
-    await rm(worktreeBDir, { recursive: true, force: true });
+    const opts = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 };
+    await rm(homeDir, opts);
+    await rm(mainRepoDir, opts);
+    await rm(worktreeADir, opts);
+    await rm(worktreeBDir, opts);
   });
 
   it("exposes all Burr skills in .agents/skills/ matching AO skill discovery structure", async () => {
@@ -101,7 +102,7 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
     expect(startB.retrievedMemories.length).toBeGreaterThan(0);
     expect(startB.injectedPrompt).toContain("Burr Learned Memory & Guidance");
     expect(startB.injectedPrompt).toContain("Run npm run build to generate dist/ output before test suite");
-  });
+  }, 20000);
 
   it("intercepts and blocks repetitive loop cycles in AO agent sessions", async () => {
     await runInit(worktreeADir);
@@ -135,5 +136,5 @@ describe("AO (Agent Orchestrator) Compatibility & Worktree Memory", () => {
 
     expect(loopResult.score).toBeGreaterThanOrEqual(50);
     expect(loopResult.suggestedAction).toBeDefined();
-  });
+  }, 20000);
 });

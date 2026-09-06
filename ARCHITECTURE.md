@@ -1,4 +1,4 @@
-# Burr — System Architecture & Design
+# Burr: System Architecture & Design
 
 > **Product:** Burr  
 > **Tagline:** Agents that remember how they got unstuck.  
@@ -21,7 +21,7 @@ Burr operates on a strict rule: **One agent learns something once. The next agen
 TASK
  │
  v
-Codex starts working (AO Session)
+Agent starts working (Agent Session)
  │
  v
 Search Burr local memory (top-k scoped match)
@@ -51,16 +51,20 @@ Task completed & verified?
    Consolidation (promote / merge into bounded memory)
       │
       v
-Next fresh Codex session inherits proven playbooks & strategies!
+Next fresh agent session inherits proven playbooks & strategies!
 ```
 
 ---
 
 ## System Architecture
 
+<p align="center">
+  <img src="assets/burr-architecture.svg" alt="Burr Architecture: Deterministic Loop Guard & Shared Memory Runtime" width="100%">
+</p>
+
 ```text
                CODING AGENTS & ORCHESTRATORS
-    (Claude Code / Codex / Cursor / Windsurf / Pi / AO)
+    (Claude Code / Codex / Cursor / Windsurf / OpenCode / Pi)
                               │
                tools / APIs / MCP / shell
                               │
@@ -87,6 +91,34 @@ Next fresh Codex session inherits proven playbooks & strategies!
 ```
 
 Burr runs **100% locally with 0 runtime dependencies**. No cloud databases, no remote telemetry, no external embedding APIs, and no mandatory model keys are required for the core loop guard and retrieval engines.
+
+---
+
+## Programmatic Node API
+
+Burr can be imported directly into custom agent frameworks, orchestrators, and testing harnesses:
+
+```typescript
+import {
+  LoopDetector,
+  detectActionLoop,
+  retrieveMemories,
+  reflectOnSession,
+  admitCandidate,
+  consolidateMemories,
+} from "burr-memory";
+
+// Initialize the deterministic loop detector
+const detector = new LoopDetector();
+
+// Evaluate a proposed tool action before execution
+const check = detector.evaluateAction("run_command", { cmd: "npm test" });
+
+if (check.blocked) {
+  console.warn("Action halted by Burr Loop Guard:", check.reasons);
+  console.info("Suggested redirection:", check.suggestedAction);
+}
+```
 
 ---
 
@@ -198,7 +230,7 @@ The core evaluation demonstrates how an agent improves over successive unseen ta
 
 | Metric | Run 1 (Cold Start) | Run 2 (Learned Rule) | Run 3 (Reused Strategy) | Run 4 (Mature Memory) | Net Improvement |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| **Session ID** | `ao-sess-task1` | `ao-sess-task2` | `ao-sess-task3` | `ao-sess-task4` | — |
+| **Session ID** | `ao-sess-task1` | `ao-sess-task2` | `ao-sess-task3` | `ao-sess-task4` | - |
 | **Total Tool Calls** | **10** | **4** | **3** | **2** | **-80.0%** |
 | **Failed / Wasted Calls** | **3** | **0** | **0** | **0** | **-100%** |
 | **Loops Detected** | **2** | **0** | **0** | **0** | **-100%** |
