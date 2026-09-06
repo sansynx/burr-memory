@@ -86,12 +86,54 @@ Burr bridges this gap by persisting verified lessons into structured machine-loc
 
 ## High-Level Architecture
 
-<p align="center">
-  <img src="assets/burr-architecture.svg" alt="Burr System Architecture: Deterministic Loop Guard and Shared Memory Runtime" width="100%">
-</p>
+```mermaid
+flowchart TD
+    subgraph Agent["1. Coding Agent Environment"]
+        A["Agent Session<br/>(Claude, Codex, Cursor, Windsurf, OpenCode, Pi)"]
+        A_ACTION["Proposed Tool Action<br/>(e.g., run_command 'npm test')"]
+        A --> A_ACTION
+    end
+
+    subgraph LoopGuard["2. Deterministic Loop Guard"]
+        LG{"LoopDetector.evaluateAction()<br/>Deterministic Risk Scoring (0 to 100)"}
+        LG_BLOCK["Risk >= 70: Hard Block<br/>Halts repetitive cycling and injects redirection advice"]
+        LG_PASS["Risk < 70: Approved<br/>Safe to execute"]
+        
+        A_ACTION --> LG
+        LG -->|Risk >= 70| LG_BLOCK
+        LG_BLOCK -.->|Redirect Agent Strategy| A
+        LG -->|Risk < 70| LG_PASS
+    end
+
+    subgraph Execution["3. Execution and Ledger"]
+        EXEC["Action Execution<br/>(Subprocess / Tool Call)"]
+        LEDGER["Action Ledger<br/>Records tool args hash and stdout fingerprint"]
+        LG_PASS --> EXEC
+        EXEC --> LEDGER
+    end
+
+    subgraph Verification["4. Proof Verification Gate"]
+        VERIFY{"Verification Passed?<br/>(e.g., npm test: 100% green)"}
+        LEDGER --> VERIFY
+        V_FAIL["Unverified Run<br/>Discarded or held in ephemeral run history"]
+        V_PASS["Verified Fix Proof<br/>Candidate generated with Problem-Cause-Fix-Verify"]
+        VERIFY -->|No| V_FAIL
+        VERIFY -->|Yes| V_PASS
+    end
+
+    subgraph Storage["5. Shared Machine Memory (~/.burr/memory/)"]
+        ADMIT["admitCandidate()<br/>Deduplication and Quality Filter"]
+        STORE[("Persistent Memory Store<br/>playbooks/ • signals/ • knowledge/")]
+        
+        V_PASS --> ADMIT
+        ADMIT --> STORE
+    end
+
+    STORE -.->|retrieveMemories() on Turn 1<br/>Reused across any project on this machine| A
+```
 
 ```text
-               CODING AGENTS & ORCHESTRATORS
+               CODING AGENTS & WORKFLOWS
     (Claude Code / Codex / Cursor / Windsurf / Pi / OpenCode)
                               │
                tools / APIs / MCP / shell

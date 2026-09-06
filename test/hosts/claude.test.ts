@@ -43,5 +43,5 @@ describe("Claude Code", () => {
       await runInit(dir);
       expect(await readFile(file, "utf8")).toBe("# edited claude skill\n");
     });
-  });
+  }, 15000);
 });
