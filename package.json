@@ -21,7 +21,8 @@
   "main": "./.opencode/plugins/burr.mjs",
   "exports": {
     ".": "./.opencode/plugins/burr.mjs",
-    "./cli": "./dist/cli/index.js"
+    "./cli": "./dist/cli/index.js",
+    "./codex": "./dist/codex/index.js"
   },
   "files": [
     "dist",

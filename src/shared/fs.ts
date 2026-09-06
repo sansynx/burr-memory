@@ -214,7 +214,12 @@ export async function withInsideLock<T>(
       }
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempt >= 500) throw error;
+      const errCode = (error as NodeJS.ErrnoException).code;
+      const isLockContention =
+        errCode === "EEXIST" ||
+        (process.platform === "win32" &&
+          (errCode === "EPERM" || errCode === "EBUSY" || errCode === "EACCES"));
+      if (!isLockContention || attempt >= 500) throw error;
       let existing;
       try {
         existing = await lstat(dest);

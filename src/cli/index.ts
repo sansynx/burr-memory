@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
+import { runCompare } from "./compare.js";
+import { runDashboard } from "./dashboard.js";
+import { runDoctor } from "./doctor.js";
 import { runGlobal } from "./global.js";
 import { runInit } from "./init.js";
+import { runMemoryCmd } from "./memory-cmd.js";
+import { runStats } from "./stats.js";
 import { summarizeUsage } from "../shared/ledger.js";
 import {
   captureSignal,
@@ -14,7 +19,7 @@ import {
 } from "../shared/memory.js";
 import type { Mode } from "../shared/types.js";
 
-const HELP = `Burr — local debugging memory for coding agents.
+const HELP = `Burr — local debugging memory and reliability runtime for coding agents.
 
 Usage:
   burr init [dir]              write .burr/ and host own-files in one project
@@ -24,10 +29,15 @@ Usage:
   burr capture --error <text>  save a redacted signal
   burr resolve --error <text> --cause <text> --fix <text> --verify <text>
   burr promote [path]          lift an old project playbook into shared memory
+  burr stats                   memory, learning, and runtime loop metrics
+  burr compare <run-a> <run-b> compare two execution runs
+  burr memory [list|inspect|prune] inspect, list, or prune memories
+  burr doctor                  check global memory, Codex hooks, and health
+  burr dashboard               launch local dashboard on http://127.0.0.1:4747
   burr audit                   usage from usage.jsonl
   burr help                    this screen
 
-Hosts: Claude Code /burr-search, Codex @burr-search, OpenCode /burr-search,
+Hosts: OpenAI Codex, Claude Code /burr-search, OpenCode /burr-search,
 Pi /skill:burr-search. Cursor and Windsurf use the always-on rule only.
 `;
 
@@ -210,6 +220,26 @@ export async function main(argv: string[]): Promise<number> {
     }
     console.log(`mode ${await readMode(cwd)}`);
     return 0;
+  }
+
+  if (command === "stats") {
+    return await runStats();
+  }
+
+  if (command === "compare") {
+    return await runCompare(args);
+  }
+
+  if (command === "memory") {
+    return await runMemoryCmd(args);
+  }
+
+  if (command === "doctor") {
+    return await runDoctor();
+  }
+
+  if (command === "dashboard") {
+    return await runDashboard();
   }
 
   console.log(HELP);

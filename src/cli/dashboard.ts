@@ -1,0 +1,332 @@
+import { createServer } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { parse } from "node:url";
+import { listAllMemories } from "../learning/consolidator.js";
+import { computeBurrStats, computeLearningProgression } from "../metrics/tracker.js";
+import { listRuns, loadRun } from "../runtime/action-ledger.js";
+import { userHome } from "../shared/home.js";
+
+function renderHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Burr Dashboard | Local Learning & Reliability Runtime</title>
+  <style>
+    :root {
+      --ink: #0F0F0E;
+      --cream: #F4EEE7;
+      --cream-card: #FFFFFF;
+      --ember: #FF5A1F;
+      --ember-light: #FFF0EB;
+      --border: #E5DCD2;
+      --text-muted: #6E6861;
+      --green: #10B981;
+      --red: #EF4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--cream);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: var(--ember);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 900;
+      font-size: 18px;
+    }
+    .brand h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand p { font-size: 14px; color: var(--text-muted); }
+    .badge {
+      background: var(--ember-light);
+      color: var(--ember);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card {
+      background: var(--cream-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .card-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+    .card-val { font-size: 28px; font-weight: 800; color: var(--ink); }
+    .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .section-title { font-size: 18px; font-weight: 700; margin: 24px 0 12px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+    .bar-chart { margin-top: 12px; }
+    .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; }
+    .bar-label { width: 80px; font-weight: 600; }
+    .bar-track { flex: 1; height: 22px; background: var(--border); border-radius: 4px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; background: var(--ember); border-radius: 4px; transition: width 0.5s ease; }
+    .bar-val { width: 60px; text-align: right; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; background: var(--cream); color: var(--text-muted); font-weight: 600; }
+    td { padding: 10px 12px; border-top: 1px solid var(--border); }
+    .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .tag-green { background: #DCFCE7; color: #15803D; }
+    .tag-red { background: #FEE2E2; color: #B91C1C; }
+    .tag-blue { background: #DBEAFE; color: #1D4ED8; }
+    .tag-ember { background: var(--ember-light); color: var(--ember); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brand-logo">B</div>
+        <div>
+          <h1>Burr Runtime Dashboard</h1>
+          <p>Local Learning & Reliability Runtime for Coding Agents</p>
+        </div>
+      </div>
+      <div>
+        <span class="badge">127.0.0.1:4747 • Local Mode</span>
+      </div>
+    </header>
+
+    <div class="grid" id="statsGrid">
+      <div class="card"><div class="card-title">Active Memories</div><div class="card-val" id="activeMemories">-</div><div class="card-sub" id="hitRateSub">Hit rate: -%</div></div>
+      <div class="card"><div class="card-title">Candidates Awaiting Admission</div><div class="card-val" id="candidates">-</div><div class="card-sub">Zero unverified leakage</div></div>
+      <div class="card"><div class="card-title">Loops Prevented</div><div class="card-val" id="loopsDetected">-</div><div class="card-sub" id="blockedSub">- blocked</div></div>
+      <div class="card"><div class="card-title">Verified Recoveries</div><div class="card-val" id="verifiedRecoveries">-</div><div class="card-sub" id="reusedSub">- reused</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Learning Progression (Tool Calls per Task)</div>
+        <div class="bar-chart" id="progressionChart">
+          <p style="color: var(--text-muted); font-size: 13px;">Loading learning curves...</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Loop Guard Risk Breakdown</div>
+        <div class="bar-chart" id="loopBreakdown">
+          <p style="color: var(--text-muted); font-size: 13px;">Loading loop statistics...</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="card-title" style="margin-bottom: 12px;">Active Memory & Learned Rules</div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Type</th>
+              <th>Scope</th>
+              <th>Confidence</th>
+              <th>Learned Statement</th>
+              <th>Reuse (Pass/Fail)</th>
+            </tr>
+          </thead>
+          <tbody id="memoriesTable">
+            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading memories...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom: 12px;">Recent Execution Runs</div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Session ID</th>
+              <th>Harness</th>
+              <th>Tool Calls</th>
+              <th>Failed Calls</th>
+              <th>Loops Detected</th>
+              <th>Duration</th>
+              <th>Verified</th>
+            </tr>
+          </thead>
+          <tbody id="runsTable">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading sessions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function refreshDashboard() {
+      try {
+        const statsRes = await fetch('/api/stats');
+        const stats = await statsRes.json();
+
+        document.getElementById('activeMemories').innerText = stats.memory.active;
+        document.getElementById('hitRateSub').innerText = 'Hit rate: ' + stats.memory.hitRate + '% (' + stats.memory.hits + ' hits / ' + stats.memory.searches + ' searches)';
+        document.getElementById('candidates').innerText = stats.memory.candidates;
+        document.getElementById('loopsDetected').innerText = stats.runtime.loopsDetected.total;
+        document.getElementById('blockedSub').innerText = stats.runtime.actionsBlocked + ' actions blocked';
+        document.getElementById('verifiedRecoveries').innerText = stats.runtime.verifiedRecoveries;
+        document.getElementById('reusedSub').innerText = stats.learning.successfulReuse + ' successful reuses';
+
+        // Loop breakdown
+        const loops = stats.runtime.loopsDetected;
+        const maxLoop = Math.max(1, loops.exact, loops.fuzzy, loops.cycles, loops.stagnation);
+        document.getElementById('loopBreakdown').innerHTML = \`
+          <div class="bar-row"><span class="bar-label">Exact repeat</span><div class="bar-track"><div class="bar-fill" style="width:\${(loops.exact/maxLoop)*100}%;"></div></div><span class="bar-val">\${loops.exact}</span></div>
+          <div class="bar-row"><span class="bar-label">Fuzzy repeat</span><div class="bar-track"><div class="bar-fill" style="width:\${(loops.fuzzy/maxLoop)*100}%;"></div></div><span class="bar-val">\${loops.fuzzy}</span></div>
+          <div class="bar-row"><span class="bar-label">Cycles (2-6)</span><div class="bar-track"><div class="bar-fill" style="width:\${(loops.cycles/maxLoop)*100}%;"></div></div><span class="bar-val">\${loops.cycles}</span></div>
+          <div class="bar-row"><span class="bar-label">Stagnation</span><div class="bar-track"><div class="bar-fill" style="width:\${(loops.stagnation/maxLoop)*100}%;"></div></div><span class="bar-val">\${loops.stagnation}</span></div>
+        \`;
+
+        // Progression
+        const progRes = await fetch('/api/progression');
+        const progression = await progRes.json();
+        if (progression && progression.length > 0) {
+          const maxCalls = Math.max(...progression.map(p => p.toolCalls), 1);
+          document.getElementById('progressionChart').innerHTML = progression.map(p => \`
+            <div class="bar-row">
+              <span class="bar-label">Run \${p.sequence}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:\${(p.toolCalls/maxCalls)*100}%;"></div></div>
+              <span class="bar-val">\${p.toolCalls} calls</span>
+            </div>
+          \`).join('');
+        } else {
+          document.getElementById('progressionChart').innerHTML = '<p style="color: var(--text-muted); font-size: 13px;">No runs recorded yet. Start a session to observe learning.</p>';
+        }
+
+        // Memories
+        const memRes = await fetch('/api/memories');
+        const memories = await memRes.json();
+        if (memories && memories.length > 0) {
+          document.getElementById('memoriesTable').innerHTML = memories.map(m => \`
+            <tr>
+              <td><code>\${m.id}</code></td>
+              <td><span class="tag tag-ember">\${m.type}</span></td>
+              <td>\${m.scope.repository || m.scope.level}</td>
+              <td>\${Math.round(m.confidence * 100)}%</td>
+              <td>\${m.statement || m.title}</td>
+              <td><span class="tag tag-green">\${m.evidence.successfulReuse}</span> / <span class="tag tag-red">\${m.evidence.failedReuse}</span></td>
+            </tr>
+          \`).join('');
+        } else {
+          document.getElementById('memoriesTable').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No active memories yet.</td></tr>';
+        }
+
+        // Runs
+        const runsRes = await fetch('/api/runs');
+        const runs = await runsRes.json();
+        if (runs && runs.length > 0) {
+          document.getElementById('runsTable').innerHTML = runs.map(r => \`
+            <tr>
+              <td><code>\${r.sessionId}</code></td>
+              <td><span class="tag tag-blue">\${r.harness}</span></td>
+              <td>\${r.toolCalls}</td>
+              <td>\${r.failedCalls}</td>
+              <td>\${r.loopsDetected}</td>
+              <td>\${Math.round(r.durationMs / 1000)}s</td>
+              <td>\${r.verified ? '<span class="tag tag-green">Verified</span>' : '<span class="tag tag-red">Unverified</span>'}</td>
+            </tr>
+          \`).join('');
+        } else {
+          document.getElementById('runsTable').innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No runs recorded yet.</td></tr>';
+        }
+
+      } catch (err) {
+        console.error("Dashboard refresh error", err);
+      }
+    }
+
+    refreshDashboard();
+    setInterval(refreshDashboard, 5000);
+  </script>
+</body>
+</html>`;
+}
+
+export async function runDashboard(
+  options: { port?: number; home?: string } = {},
+): Promise<number> {
+  const port = options.port ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 4747);
+  const home = options.home ?? userHome();
+
+  const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    const parsedUrl = parse(req.url || "/", true);
+    const pathname = parsedUrl.pathname || "/";
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-cache");
+
+    if (pathname === "/") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(renderHtml());
+      return;
+    }
+
+    if (pathname === "/api/stats") {
+      const stats = await computeBurrStats(home);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(stats));
+      return;
+    }
+
+    if (pathname === "/api/progression") {
+      const prog = await computeLearningProgression(home);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(prog));
+      return;
+    }
+
+    if (pathname === "/api/memories") {
+      const memories = await listAllMemories(home);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(memories));
+      return;
+    }
+
+    if (pathname === "/api/runs") {
+      const runIds = await listRuns(home);
+      const runs = await Promise.all(runIds.slice(-20).reverse().map((id) => loadRun(home, id)));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(runs.filter(Boolean)));
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not found");
+  });
+
+  return new Promise((resolve) => {
+    server.listen(port, "127.0.0.1", () => {
+      console.log(`Burr Dashboard running at http://127.0.0.1:${port}/`);
+      console.log("Press Ctrl+C to stop.");
+    });
+
+    process.on("SIGINT", () => {
+      server.close();
+      resolve(0);
+    });
+  });
+}
