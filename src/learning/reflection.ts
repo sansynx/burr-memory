@@ -60,7 +60,7 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
     if (a.normalizedArgs && typeof a.normalizedArgs === "object") {
       const args = a.normalizedArgs as Record<string, unknown>;
       const pathCandidate = args.path || args.file || args.filepath || args.target;
-      if (typeof pathCandidate === "string" && pathCandidate.includes("/")) {
+      if (typeof pathCandidate === "string" && (pathCandidate.includes("/") || pathCandidate.includes("\\"))) {
         const cleaned = pathCandidate.trim();
         if (a.signals?.exactRepeat || a.signals?.cycle) {
           filesLooped.add(cleaned);

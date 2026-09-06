@@ -205,10 +205,11 @@ export interface LearningProgressionStep {
 export async function computeLearningProgression(home?: string): Promise<LearningProgressionStep[]> {
   const resolvedHome = home ?? userHome();
   const runIds = await listRuns(resolvedHome);
+  const summaries = await Promise.all(runIds.map((id) => loadRun(resolvedHome, id)));
   const steps: LearningProgressionStep[] = [];
 
-  for (let i = 0; i < runIds.length; i += 1) {
-    const summary = await loadRun(resolvedHome, runIds[i]!);
+  for (let i = 0; i < summaries.length; i += 1) {
+    const summary = summaries[i];
     if (summary) {
       steps.push({
         sessionId: summary.sessionId,

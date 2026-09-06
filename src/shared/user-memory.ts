@@ -50,8 +50,18 @@ export function userMetricsEventsPath(home?: string): string {
   return join(userMetricsDir(home), "events.jsonl");
 }
 
+const ensuredMemoryRoots = new Set<string>();
+
+export function clearEnsuredMemoryCache(): void {
+  ensuredMemoryRoots.clear();
+}
+
 export async function ensureUserMemory(home?: string): Promise<string> {
   const root = memoryHome(home);
+  if (ensuredMemoryRoots.has(root)) {
+    return root;
+  }
+
   await Promise.all([
     mkdir(userPlaybooksDir(root), { recursive: true }),
     mkdir(userSignalsDir(root), { recursive: true }),
@@ -62,5 +72,6 @@ export async function ensureUserMemory(home?: string): Promise<string> {
     mkdir(userArchiveDir(root), { recursive: true }),
     mkdir(userMetricsDir(root), { recursive: true }),
   ]);
+  ensuredMemoryRoots.add(root);
   return root;
 }

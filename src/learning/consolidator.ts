@@ -40,21 +40,19 @@ export async function listCandidates(home?: string): Promise<CandidateLesson[]> 
   const dir = userCandidatesDir(resolvedHome);
   try {
     const entries = await readdir(dir, { withFileTypes: true });
-    const candidates: CandidateLesson[] = [];
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".json")) {
+    const jsonFiles = entries.filter((e) => e.isFile() && e.name.endsWith(".json"));
+    const results = await Promise.all(
+      jsonFiles.map(async (entry) => {
         try {
           const raw = await readInside(resolvedHome, join(dir, entry.name));
           const parsed = JSON.parse(raw) as CandidateLesson;
-          if (parsed && parsed.id && parsed.statement) {
-            candidates.push(parsed);
-          }
+          return parsed && parsed.id && parsed.statement ? parsed : null;
         } catch {
-          // ignore malformed candidate
+          return null;
         }
-      }
-    }
-    return candidates;
+      }),
+    );
+    return results.filter((c): c is CandidateLesson => c !== null);
   } catch {
     return [];
   }
@@ -211,30 +209,30 @@ export async function listAllMemories(home?: string): Promise<MemoryItem[]> {
     userArchiveDir(resolvedHome),
   ];
 
-  const items: MemoryItem[] = [];
-
-  for (const dir of dirs) {
-    try {
-      const entries = await readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith(".json")) {
-          try {
-            const raw = await readInside(resolvedHome, join(dir, entry.name));
-            const parsed = JSON.parse(raw) as MemoryItem;
-            if (parsed && parsed.id) {
-              items.push(parsed);
+  const dirResults = await Promise.all(
+    dirs.map(async (dir) => {
+      try {
+        const entries = await readdir(dir, { withFileTypes: true });
+        const jsonFiles = entries.filter((e) => e.isFile() && e.name.endsWith(".json"));
+        const parsed = await Promise.all(
+          jsonFiles.map(async (entry) => {
+            try {
+              const raw = await readInside(resolvedHome, join(dir, entry.name));
+              const item = JSON.parse(raw) as MemoryItem;
+              return item && item.id ? item : null;
+            } catch {
+              return null;
             }
-          } catch {
-            // ignore
-          }
-        }
+          }),
+        );
+        return parsed.filter((m): m is MemoryItem => m !== null);
+      } catch {
+        return [];
       }
-    } catch {
-      // ignore
-    }
-  }
+    }),
+  );
 
-  return items;
+  return dirResults.flat();
 }
 
 export async function recordMemoryReuse(

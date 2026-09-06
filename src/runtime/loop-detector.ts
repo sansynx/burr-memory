@@ -31,17 +31,22 @@ export function fingerprintOutput(output: unknown): string {
   return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
-export function jaccardSimilarity(tokensA: string[], tokensB: string[]): number {
-  if (tokensA.length === 0 && tokensB.length === 0) return 1.0;
-  if (tokensA.length === 0 || tokensB.length === 0) return 0.0;
-  const setA = new Set(tokensA);
-  const setB = new Set(tokensB);
+export function setJaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+  if (setA.size === 0 && setB.size === 0) return 1.0;
+  if (setA.size === 0 || setB.size === 0) return 0.0;
+  const [smaller, larger] = setA.size <= setB.size ? [setA, setB] : [setB, setA];
   let intersection = 0;
-  for (const t of setA) {
-    if (setB.has(t)) intersection += 1;
+  for (const t of smaller) {
+    if (larger.has(t)) intersection += 1;
   }
   const union = setA.size + setB.size - intersection;
   return union === 0 ? 0 : intersection / union;
+}
+
+export function jaccardSimilarity(tokensA: string[], tokensB: string[]): number {
+  if (tokensA.length === 0 && tokensB.length === 0) return 1.0;
+  if (tokensA.length === 0 || tokensB.length === 0) return 0.0;
+  return setJaccardSimilarity(new Set(tokensA), new Set(tokensB));
 }
 
 export function extractArgTokens(args: unknown): string[] {
@@ -86,6 +91,7 @@ export function detectFuzzyRepetition(
 ): { detected: boolean; similarity: number } {
   const currentTokens = extractArgTokens(args);
   if (currentTokens.length === 0) return { detected: false, similarity: 0 };
+  const currentSet = new Set(currentTokens);
 
   const toolNormalized = tool.trim().toLowerCase();
   let maxSim = 0;
@@ -94,7 +100,7 @@ export function detectFuzzyRepetition(
     const prev = recentActions[i]!;
     if (prev.tool.trim().toLowerCase() === toolNormalized) {
       const prevTokens = extractArgTokens(prev.normalizedArgs);
-      const sim = jaccardSimilarity(currentTokens, prevTokens);
+      const sim = setJaccardSimilarity(currentSet, new Set(prevTokens));
       if (sim > maxSim) {
         maxSim = sim;
       }

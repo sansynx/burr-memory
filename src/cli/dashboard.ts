@@ -1,6 +1,5 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { parse } from "node:url";
 import { listAllMemories } from "../learning/consolidator.js";
 import { computeBurrStats, computeLearningProgression } from "../metrics/tracker.js";
 import { listRuns, loadRun } from "../runtime/action-ledger.js";
@@ -273,8 +272,8 @@ export async function runDashboard(
   const home = options.home ?? userHome();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const parsedUrl = parse(req.url || "/", true);
-    const pathname = parsedUrl.pathname || "/";
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const pathname = url.pathname;
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "no-cache");

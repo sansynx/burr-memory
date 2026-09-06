@@ -8,7 +8,20 @@ import type { BurrAction, RunSummary } from "../shared/types.js";
 import { ensureUserMemory, userRunsDir } from "../shared/user-memory.js";
 
 const MAX_SESSION_ACTIONS = 500;
+const MAX_CACHED_SESSIONS = 50;
 const sessionMemoryCache = new Map<string, BurrAction[]>();
+
+export function clearSessionCache(): void {
+  sessionMemoryCache.clear();
+}
+
+function cacheSessionActions(sessionId: string, actions: BurrAction[]): void {
+  if (sessionMemoryCache.size >= MAX_CACHED_SESSIONS && !sessionMemoryCache.has(sessionId)) {
+    const oldestKey = sessionMemoryCache.keys().next().value;
+    if (oldestKey) sessionMemoryCache.delete(oldestKey);
+  }
+  sessionMemoryCache.set(sessionId, actions);
+}
 
 function sanitizeSessionId(sessionId: string): string {
   return sessionId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
@@ -30,7 +43,7 @@ export async function recordAction(
   let cached = sessionMemoryCache.get(sessionId);
   if (!cached) {
     cached = await getSessionActions(resolvedHome, sessionId);
-    sessionMemoryCache.set(sessionId, cached);
+    cacheSessionActions(sessionId, cached);
   }
 
   const sequence = action.sequence ?? (cached.length > 0 ? cached[cached.length - 1]!.sequence + 1 : 1);
@@ -91,7 +104,7 @@ export async function getSessionActions(home: string | undefined, sessionId: str
       }
     }
 
-    sessionMemoryCache.set(sessionId, actions);
+    cacheSessionActions(sessionId, actions);
     return actions;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
