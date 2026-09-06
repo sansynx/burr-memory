@@ -84,15 +84,12 @@ Burr bridges this gap by persisting verified lessons into structured machine-loc
 ## High-Level Architecture
 
 ```text
-                               AO
-                   Agent Orchestrator Harness
-                               │
-                               v
-                       OPENAI CODEX
-                               │
-                tools / APIs / MCP / shell
-                               │
-                               v
+               CODING AGENTS & ORCHESTRATORS
+    (Claude Code / Codex / Cursor / Windsurf / Pi / OpenCode)
+                              │
+               tools / APIs / MCP / shell
+                              │
+                              v
                 ┌─────────────────────────────┐
                 │            BURR             │
                 │                             │

@@ -11,7 +11,7 @@ import {
 import { computeLearningProgression, computeBurrStats } from "../src/metrics/tracker.js";
 import { listAllMemories, listCandidates } from "../src/learning/consolidator.js";
 
-describe("Syndicate Benchmark: Multi-Session Learning Progression", () => {
+describe("Burr Benchmark: Multi-Session Learning Progression", () => {
   let homeDir: string;
   let repoRoot: string;
 

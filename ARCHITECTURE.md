@@ -1,12 +1,9 @@
-# Burr — Hackathon Submission
+# Burr — System Architecture & Design
 
-> **Syndicate by Maximor**  
-> **Track:** Automated Agent Engineering  
 > **Product:** Burr  
 > **Tagline:** Agents that remember how they got unstuck.  
 > **Repository:** [https://github.com/sansynx/burr-memory](https://github.com/sansynx/burr-memory)  
-> **Devpost:** [https://syndicate-by-maximor.devpost.com/](https://syndicate-by-maximor.devpost.com/)  
-> **AO (Agent Orchestrator):** [https://aoagents.dev/](https://aoagents.dev/) | [AO GitHub](https://github.com/Untrivial-ai/agent-orchestrator)  
+> **Package:** `burr-memory` (npm)
 
 ---
 
@@ -16,7 +13,7 @@ Autonomous coding agents routinely fail in two distinct ways:
 1. **Current-session looping:** When an approach fails, agents repeatedly retry minor variations of failing commands, grep in circles, or emit stagnant outputs without recognizing that they are stuck.
 2. **Cross-session amnesia:** Once a session ends or context is compacted, hard-won insights vanish. A fresh agent starting on the same repository repeats identical exploration mistakes and crashes into the same pitfalls.
 
-**Burr** solves both problems as a **local learning and reliability runtime for coding agents**, featuring **OpenAI Codex** as a first-class integration and **AO (Agent Orchestrator)** as the orchestration harness.
+**Burr** solves both problems as a **local learning and reliability runtime for coding agents**, operating as an independent, offline memory layer across any agent harness (Claude Code, OpenAI Codex, Cursor, Windsurf, OpenCode, Pi, or custom orchestrators).
 
 Burr operates on a strict rule: **One agent learns something once. The next agent must not repeat the same debugging or tool-usage mistakes.**
 
@@ -62,15 +59,12 @@ Next fresh Codex session inherits proven playbooks & strategies!
 ## System Architecture
 
 ```text
-                              AO
-                 Agent Orchestrator Harness
-                             │
-                             v
-                     OPENAI CODEX
-                             │
-              tools / APIs / MCP / shell
-                             │
-                             v
+               CODING AGENTS & ORCHESTRATORS
+    (Claude Code / Codex / Cursor / Windsurf / Pi / AO)
+                              │
+               tools / APIs / MCP / shell
+                              │
+                              v
               ┌─────────────────────────────┐
               │            BURR             │
               │                             │
@@ -152,12 +146,11 @@ Burr does not allow unbounded memory accumulation:
 
 ## Multi-Session Benchmark: Progression Over Time
 
-The core evaluation for the **Automated Agent Engineering** track demonstrates how an agent improves over successive unseen tasks orchestrated via **AO (Agent Orchestrator)**.
+The core evaluation demonstrates how an agent improves over successive unseen tasks using Burr's learning runtime.
 
 ### Test Environment
 - **Repository:** `sansynx/burr-memory`
-- **Orchestrator:** AO (`aoagents.dev`)
-- **Agent Integration:** OpenAI Codex runtime hooks
+- **Agent Integration:** Runtime hooks and multi-agent harnesses
 - **Harness:** Automated deterministic multi-session benchmark runner (`test/benchmark.test.ts`)
 
 ### Benchmark Execution Trace
