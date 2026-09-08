@@ -154,3 +154,67 @@ describe("Pi", () => {
     });
   });
 });
+
+it("registers runtime observation and blocking handlers", async () => {
+  const mod = await import(
+    pathToFileURL(join(findPackageRoot(), "pi-extension", "index.ts")).href
+  );
+  const events: string[] = [];
+  mod.default({ on: (event: string) => events.push(event) });
+  expect(events).toContain("tool_call");
+  expect(events).toContain("tool_result");
+});
+
+it("records Pi tool results in isolated storage and honors off mode", async () => {
+  await withTempDir(async (dir) => {
+    const previous = process.env.BURR_HOME;
+    process.env.BURR_HOME = dir;
+    try {
+      const mod = await import(
+        pathToFileURL(join(findPackageRoot(), "pi-extension", "index.ts")).href
+      );
+      const handlers = new Map<
+        string,
+        (event: unknown, ctx: unknown) => Promise<unknown>
+      >();
+      mod.default({
+        on: (
+          event: string,
+          handler: (event: unknown, ctx: unknown) => Promise<unknown>,
+        ) => handlers.set(event, handler),
+      });
+      const ctx = {
+        cwd: dir,
+        sessionManager: { getSessionId: () => "pi-native-test" },
+      };
+      await handlers.get("tool_result")!(
+        {
+          toolName: "bash",
+          input: { command: "echo test" },
+          content: [{ type: "text", text: "test" }],
+          isError: false,
+        },
+        ctx,
+      );
+      const ledger = await readFile(
+        join(dir, ".burr", "runs", "pi-native-test.jsonl"),
+        "utf8",
+      );
+      expect(JSON.parse(ledger.trim()).harness).toBe("pi");
+      await setMode(dir, "off");
+      await handlers.get("tool_result")!(
+        { toolName: "bash", input: {}, content: "ignored" },
+        ctx,
+      );
+      expect(
+        await readFile(
+          join(dir, ".burr", "runs", "pi-native-test.jsonl"),
+          "utf8",
+        ),
+      ).toBe(ledger);
+    } finally {
+      if (previous === undefined) delete process.env.BURR_HOME;
+      else process.env.BURR_HOME = previous;
+    }
+  });
+});

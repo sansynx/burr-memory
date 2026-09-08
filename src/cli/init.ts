@@ -1,6 +1,13 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { writeIfMissing, resolveProjectRoot } from "../shared/fs.js";
+import { pathToFileURL } from "node:url";
+import {
+  writeIfMissing,
+  resolveProjectRoot,
+  readInside,
+  writeInside,
+} from "../shared/fs.js";
 import { ensureBurrGitignore } from "../shared/gitignore.js";
 import { mergeOpenCodePlugin } from "../shared/opencode.js";
 import { findPackageRoot } from "../shared/package-root.js";
@@ -37,7 +44,10 @@ function posix(path: string): string {
   return path.replaceAll("\\", "/");
 }
 
-export async function runInit(cwd: string, options: InitOptions = {}): Promise<InitResult> {
+export async function runInit(
+  cwd: string,
+  options: InitOptions = {},
+): Promise<InitResult> {
   const log = options.log ?? (() => undefined);
   const root = await resolveProjectRoot(cwd);
   const pack = findPackageRoot();
@@ -51,6 +61,24 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
   };
 
   const write = async (rel: string, data: string) => {
+    if (rel === ".opencode/plugins/burr.mjs") {
+      const existing = await readInside(root, join(root, rel)).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return "";
+          throw error;
+        },
+      );
+      if (
+        createHash("sha256")
+          .update(existing.replace(/\r\n/g, "\n"))
+          .digest("hex") ===
+        "a5c7bb380666b9f1442b1c5b2aa631b1b05d38c7bfdc7b6f814464e90a2a8082"
+      ) {
+        await writeInside(root, join(root, rel), data);
+        note(rel, "created");
+        return;
+      }
+    }
     const result = await writeIfMissing(root, join(root, rel), data);
     note(rel, result);
   };
@@ -59,26 +87,52 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
     readFile(join(pack, "templates", "instructions.md"), "utf8"),
     readFile(join(pack, "templates", "config.json"), "utf8"),
     readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8"),
-    Promise.all(SKILLS.map((name) => readFile(join(pack, "skills", name, "SKILL.md"), "utf8"))),
+    Promise.all(
+      SKILLS.map((name) =>
+        readFile(join(pack, "skills", name, "SKILL.md"), "utf8"),
+      ),
+    ),
   ]);
 
-  await write(".burr/config.json", config.endsWith("\n") ? config : `${config}\n`);
-  await write(".burr/instructions.md", instructions.endsWith("\n") ? instructions : `${instructions}\n`);
+  await write(
+    ".burr/config.json",
+    config.endsWith("\n") ? config : `${config}\n`,
+  );
+  await write(
+    ".burr/instructions.md",
+    instructions.endsWith("\n") ? instructions : `${instructions}\n`,
+  );
   await write(".burr/usage.jsonl", "");
   note(".gitignore", await ensureBurrGitignore(root));
 
   for (let i = 0; i < SKILLS.length; i += 1) {
     const name = SKILLS[i]!;
     const skill = skillsData[i]!;
-    for (const tree of [".burr/skills", ".claude/skills", ".agents/skills", ".pi/skills"]) {
+    for (const tree of [
+      ".burr/skills",
+      ".claude/skills",
+      ".agents/skills",
+      ".pi/skills",
+    ]) {
       await write(`${tree}/${name}/SKILL.md`, skill);
     }
     await write(`.opencode/command/${name}.md`, skill);
   }
 
-  await write(".opencode/plugins/burr.mjs", plugin);
+  await write(
+    ".opencode/plugins/burr.mjs",
+    plugin.replace(
+      'new URL("../../dist/codex/index.js", import.meta.url).href',
+      JSON.stringify(
+        pathToFileURL(join(pack, "dist", "codex", "index.js")).href,
+      ),
+    ),
+  );
   await write(".cursor/rules/burr.mdc", `${CURSOR_FRONTMATTER}${instructions}`);
-  await write(".windsurf/rules/burr.md", instructions.endsWith("\n") ? instructions : `${instructions}\n`);
+  await write(
+    ".windsurf/rules/burr.md",
+    instructions.endsWith("\n") ? instructions : `${instructions}\n`,
+  );
 
   for (const file of ["opencode.json", ".opencode/opencode.json"]) {
     const result = await mergeOpenCodePlugin(root, file, PLUGIN_PATH);
@@ -92,7 +146,9 @@ export async function runInit(cwd: string, options: InitOptions = {}): Promise<I
     log("Skipped (exists):");
     for (const path of skipped) log(`  ${path}`);
   }
-  log("No existing instruction file was modified. Burr never edits AGENTS.md or CLAUDE.md.");
+  log(
+    "No existing instruction file was modified. Burr never edits AGENTS.md or CLAUDE.md.",
+  );
   log("No key asked. No network used.");
 
   return { created, skipped, untouchedInstructions: true };

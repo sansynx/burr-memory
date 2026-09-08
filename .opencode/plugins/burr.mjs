@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+const RUNTIME_URL = new URL("../../dist/codex/index.js", import.meta.url).href;
 const USER_HOME = process.env.BURR_HOME || homedir();
 const DEFAULT_INSTRUCTIONS = `Burr is local debugging memory for coding agents.
 
@@ -75,7 +76,9 @@ function loadInstructions(root, mode) {
   const global = join(USER_HOME, ".config", "opencode", "burr-instructions.md");
   const instructions = readText(global) || DEFAULT_INSTRUCTIONS;
   const currentMode = mode || loadMode(root);
-  return currentMode === "strict" ? `${instructions}${STRICT_INSTRUCTIONS}` : instructions;
+  return currentMode === "strict"
+    ? `${instructions}${STRICT_INSTRUCTIONS}`
+    : instructions;
 }
 
 async function attachV2(ctx, root) {
@@ -110,6 +113,35 @@ export default async function burr(ctx) {
 
   return {
     command: COMMANDS,
+    "tool.execute.before": async (input, output) => {
+      if (loadMode(root) === "off") return;
+      const runtime = await import(RUNTIME_URL);
+      const result = await runtime.handlePreToolUse(
+        {
+          sessionId: input.sessionID,
+          tool: input.tool,
+          args: output.args ?? {},
+        },
+        { root, harness: "opencode" },
+      );
+      if (!result.allow)
+        throw new Error(
+          result.message ?? "Burr detected a repeated failing action.",
+        );
+    },
+    "tool.execute.after": async (input, output) => {
+      if (loadMode(root) === "off") return;
+      const runtime = await import(RUNTIME_URL);
+      await runtime.handlePostToolUse(
+        {
+          sessionId: input.sessionID,
+          tool: input.tool,
+          args: input.args ?? {},
+          output: output.output ?? "",
+        },
+        { root, harness: "opencode" },
+      );
+    },
     "experimental.chat.system.transform": async (_input, output) => {
       const mode = loadMode(root);
       if (mode === "off") return;

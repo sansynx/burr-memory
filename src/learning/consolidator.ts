@@ -433,3 +433,19 @@ export async function consolidateMemories(
 
   return { promoted, merged, discarded };
 }
+
+export async function trimCandidates(
+  home?: string,
+  maxCandidates = 100,
+): Promise<number> {
+  if (!Number.isInteger(maxCandidates) || maxCandidates < 1)
+    throw new Error("Invalid candidate limit");
+  const candidates = await listCandidates(home);
+  candidates.sort(
+    (a, b) =>
+      b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+  );
+  const expired = candidates.slice(maxCandidates);
+  for (const candidate of expired) await deleteCandidate(candidate.id, home);
+  return expired.length;
+}

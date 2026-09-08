@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { writeIfMissing, writeInside } from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
 import { mergeOpenCodePlugin } from "../shared/opencode.js";
@@ -95,17 +96,31 @@ export async function runGlobal(
     let result: "created" | "skipped";
     try {
       const existing = await readFile(dest, "utf8");
-      if (existing.includes(MANAGED_MARKER)) {
+      if (
+        knownLegacy.includes(
+          createHash("sha256")
+            .update(existing.replace(/\r\n/g, "\n"))
+            .digest("hex"),
+        )
+      ) {
+        await writeInside(home, dest, data);
+        result = "created";
+      } else if (existing.includes(MANAGED_MARKER)) {
         result = "skipped";
       } else {
         const hash = createHash("sha256")
           .update(existing.replace(/\r\n/g, "\n"))
           .digest("hex");
-        if (/burr-managed:\s*\d+/.test(existing) || knownLegacy.includes(hash)) {
+        if (
+          /burr-managed:\s*\d+/.test(existing) ||
+          knownLegacy.includes(hash)
+        ) {
           await writeInside(home, dest, data);
           result = "created";
         } else {
-          warnings.push(`  ~/${posix(rel)} (legacy or edited; replace manually)`);
+          warnings.push(
+            `  ~/${posix(rel)} (legacy or edited; replace manually)`,
+          );
           result = "skipped";
         }
       }
@@ -119,7 +134,11 @@ export async function runGlobal(
   const [instructions, plugin, skillsData] = await Promise.all([
     readFile(join(pack, "templates", "global-instructions.md"), "utf8"),
     readFile(join(pack, ".opencode", "plugins", "burr.mjs"), "utf8"),
-    Promise.all(SKILLS.map((name) => readFile(join(pack, "skills", name, "SKILL.md"), "utf8"))),
+    Promise.all(
+      SKILLS.map((name) =>
+        readFile(join(pack, "skills", name, "SKILL.md"), "utf8"),
+      ),
+    ),
   ]);
   const managedInstructions = `<!-- ${MANAGED_MARKER} -->\n${instructions}`;
   const cursor = `${CURSOR_FRONTMATTER}${managedInstructions}`;
@@ -127,16 +146,12 @@ export async function runGlobal(
     ? managedInstructions
     : `${managedInstructions}\n`;
 
-  await write(
-    ".cursor/rules/burr.mdc",
-    cursor,
-    ["449e17fdf0dca721281103adaa41e39c937cbc22761022687eee3df3e23a9aaa"],
-  );
-  await write(
-    ".windsurf/rules/burr.md",
-    windsurf,
-    ["ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9"],
-  );
+  await write(".cursor/rules/burr.mdc", cursor, [
+    "449e17fdf0dca721281103adaa41e39c937cbc22761022687eee3df3e23a9aaa",
+  ]);
+  await write(".windsurf/rules/burr.md", windsurf, [
+    "ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9",
+  ]);
 
   for (let i = 0; i < SKILLS.length; i += 1) {
     const name = SKILLS[i]!;
@@ -161,17 +176,27 @@ export async function runGlobal(
 
   await write(
     ".config/opencode/plugins/burr.mjs",
-    plugin,
-    ["859fe880466c21d9bc27ba2c8020ef6c48c23c6651a663e9b3e63416a56ae617"],
+    plugin.replace(
+      'new URL("../../dist/codex/index.js", import.meta.url).href',
+      JSON.stringify(
+        pathToFileURL(join(pack, "dist", "codex", "index.js")).href,
+      ),
+    ),
+    [
+      "859fe880466c21d9bc27ba2c8020ef6c48c23c6651a663e9b3e63416a56ae617",
+      "a5c7bb380666b9f1442b1c5b2aa631b1b05d38c7bfdc7b6f814464e90a2a8082",
+    ],
   );
-  await write(
-    ".config/opencode/burr-instructions.md",
-    windsurf,
-    ["ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9"],
-  );
+  await write(".config/opencode/burr-instructions.md", windsurf, [
+    "ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9",
+  ]);
   note(
     ".config/opencode/opencode.json",
-    await mergeOpenCodePlugin(home, ".config/opencode/opencode.json", PLUGIN_PATH),
+    await mergeOpenCodePlugin(
+      home,
+      ".config/opencode/opencode.json",
+      PLUGIN_PATH,
+    ),
   );
 
   log("Created:");
@@ -185,7 +210,9 @@ export async function runGlobal(
     log("Needs manual refresh (preserved because it may be edited):");
     for (const warning of warnings) log(warning);
   }
-  log("Burr is on for new projects. Playbooks live in ~/.burr/memory/ on this machine.");
+  log(
+    "Burr is on for new projects. Playbooks live in ~/.burr/memory/ on this machine.",
+  );
   log("No key asked. No network used.");
 
   return { created, skipped };

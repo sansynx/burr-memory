@@ -3,13 +3,15 @@ import {
   getMemory,
   listAllMemories,
   listCandidates,
+  trimCandidates,
 } from "../learning/consolidator.js";
 import { cleanOldRuns } from "../runtime/action-ledger.js";
+import { loadConfig } from "../shared/config.js";
 import { userHome } from "../shared/home.js";
 
 export async function runMemoryCmd(
   args: string[],
-  options: { home?: string } = {},
+  options: { home?: string; root?: string } = {},
 ): Promise<number> {
   const home = options.home ?? userHome();
   const subcommand = args[0] || "summary";
@@ -43,7 +45,9 @@ export async function runMemoryCmd(
     for (const m of memories) {
       const scopeLabel = m.scope.repository || m.scope.level;
       const confPct = `${Math.round(m.confidence * 100)}%`;
-      console.log(`- [${m.id}] [${m.type.toUpperCase()}] [${m.status}] (${confPct}, scope: ${scopeLabel})`);
+      console.log(
+        `- [${m.id}] [${m.type.toUpperCase()}] [${m.status}] (${confPct}, scope: ${scopeLabel})`,
+      );
       console.log(`  ${m.statement || m.title}`);
     }
     return 0;
@@ -75,17 +79,25 @@ export async function runMemoryCmd(
 
   if (subcommand === "prune") {
     console.log("Applying memory decay and cleaning old run history...");
-    const result = await applyMemoryDecayAndPruning(home);
-    const runsDeleted = await cleanOldRuns(home, 7);
+    const { memory } = await loadConfig(options.root ?? process.cwd());
+    const result = await applyMemoryDecayAndPruning(
+      home,
+      memory.archiveAfterDays,
+    );
+    const candidatesDeleted = await trimCandidates(home, memory.maxCandidates);
+    const runsDeleted = await cleanOldRuns(home, memory.runRetentionDays);
 
     console.log(`Pruning complete:`);
     console.log(`  Staled:   ${result.staled}`);
     console.log(`  Archived: ${result.archived}`);
     console.log(`  Pruned:   ${result.pruned}`);
+    console.log(`  Excess candidates deleted: ${candidatesDeleted}`);
     console.log(`  Expired runs deleted: ${runsDeleted}`);
     return 0;
   }
 
-  console.error(`Unknown memory subcommand: "${subcommand}". Usage: burr memory [list | inspect <id> | prune]`);
+  console.error(
+    `Unknown memory subcommand: "${subcommand}". Usage: burr memory [list | inspect <id> | prune]`,
+  );
   return 1;
 }

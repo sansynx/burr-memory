@@ -71,14 +71,14 @@ flowchart LR
     Runtime -->|"verified lessons"| Memory
 ```
 
-Skills and CLI commands handle the debugging workflow. Runtime hooks add tool observation when an integration calls them. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
+Skills and CLI commands handle the debugging workflow. Pi and OpenCode adapters connect runtime tool observation; other hosts can call the exported handlers. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
 
 ## Learning and retention
 
 - `capture` admits reusable failures and rejects common temporary environment noise.
 - `resolve` requires error, cause, fix, and verification text. The caller must run the check and report its result truthfully; Burr does not execute verification commands itself.
 - Runtime session completion accepts verification evidence from the integrating host. Admission filters candidate lessons before promotion or merging.
-- `burr memory prune` applies decay and removes expired run history. This is an explicit maintenance command, not a background scheduler. The parsed `runRetentionDays`, `archiveAfterDays`, and `maxCandidates` configuration fields are reserved; current CLI pruning uses the defaults below. Defaults mark memories stale after 30 days and archive them after 60 days; run history is retained for seven days.
+- `burr memory prune` applies decay and removes expired run history. This is an explicit maintenance command, not a background scheduler. `runRetentionDays`, `archiveAfterDays`, and `maxCandidates` control pruning; candidate creation also enforces the configured cap. Defaults mark memories stale after 30 days and archive them after 60 days; run history is retained for seven days.
 - Runtime JSON memories and CLI Markdown playbooks use separate retrieval paths. The runtime dashboard reports runtime records, while `burr search` and `burr audit` cover the CLI workflow.
 
 ## Programmatic Node API
@@ -100,7 +100,7 @@ if (check.blocked) {
 }
 ```
 
-`burr-memory/codex` exports `handleSessionStart`, `handlePreToolUse`, `handlePostToolUse`, `handleSessionEnd`, and compaction helpers. Custom integrations call these functions with a consistent session ID, project root, and verification evidence. Pi extension commands dispatch through the host messaging API. `burr init` installs Codex skills; it does not register these lifecycle functions with Codex automatically.
+`burr-memory/codex` exports `handleSessionStart`, `handlePreToolUse`, `handlePostToolUse`, `handleSessionEnd`, and compaction helpers. Custom integrations call these functions with a consistent session ID, project root, and verification evidence. The installed Pi extension observes tool calls and results and can block repeated failures. The OpenCode plugin registers native before/after tool hooks; newly generated copies point to the local package runtime, so keep that package installation available. Rerun `burr init` or `burr global` to upgrade an unchanged previous OpenCode adapter; edited copies are preserved. Session completion alone never promotes a fix. `burr init` installs Codex skills; it does not register these lifecycle functions with Codex automatically.
 
 ---
 

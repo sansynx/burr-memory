@@ -56,8 +56,18 @@ type PiApi = {
   on?: (
     event: string,
     handler: (
-      event: { systemPrompt?: string },
-      ctx: { cwd?: string },
+      event: {
+        systemPrompt?: string;
+        toolName?: string;
+        input?: unknown;
+        content?: unknown;
+        isError?: boolean;
+      },
+      ctx: {
+        cwd?: string;
+        sessionManager?: { getSessionId(): string };
+        ui?: { notify(message: string, level: "warning"): void };
+      },
     ) => Promise<unknown> | unknown,
   ) => void;
 };
@@ -109,6 +119,46 @@ function loadInstructions(
 }
 
 export default function burr(pi: PiApi): void {
+  const runtime = () =>
+    import(new URL("../dist/codex/index.js", import.meta.url).href) as Promise<
+      typeof import("../src/codex/index.js")
+    >;
+  pi.on?.("tool_call", async (event, ctx) => {
+    const sessionId = ctx.sessionManager?.getSessionId();
+    if (!sessionId || !event.toolName || loadMode(projectRoot(ctx)) === "off")
+      return;
+    const result = await (
+      await runtime()
+    ).handlePreToolUse(
+      { sessionId, tool: event.toolName, args: event.input ?? {} },
+      { root: projectRoot(ctx), harness: "pi" },
+    );
+    if (!result.allow)
+      return {
+        block: true,
+        reason: result.message ?? "Burr detected a repeated failing action.",
+      };
+    if (result.warning) ctx.ui?.notify(result.warning, "warning");
+  });
+  pi.on?.("tool_result", async (event, ctx) => {
+    const sessionId = ctx.sessionManager?.getSessionId();
+    if (!sessionId || !event.toolName || loadMode(projectRoot(ctx)) === "off")
+      return;
+    await (
+      await runtime()
+    ).handlePostToolUse(
+      {
+        sessionId,
+        tool: event.toolName,
+        args: event.input ?? {},
+        output: event.content ?? "",
+        error: event.isError
+          ? JSON.stringify(event.content ?? "Tool failed")
+          : undefined,
+      },
+      { root: projectRoot(ctx), harness: "pi" },
+    );
+  });
   for (const [name, command] of Object.entries(COMMANDS)) {
     pi.registerCommand?.(name, {
       description: command.description,

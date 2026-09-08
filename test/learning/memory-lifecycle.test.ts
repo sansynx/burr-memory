@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { evaluateCandidateAdmission } from "../../src/learning/admission.js";
 import {
   applyMemoryDecayAndPruning,
+  trimCandidates,
   getMemory,
   listAllMemories,
   listCandidates,
@@ -13,6 +14,8 @@ import {
   saveCandidate,
   saveMemoryItem,
 } from "../../src/learning/consolidator.js";
+import { loadConfig } from "../../src/shared/config.js";
+import { runInit } from "../../src/cli/init.js";
 import { reflectOnSession } from "../../src/learning/reflection.js";
 import { recordAction } from "../../src/runtime/action-ledger.js";
 import type { CandidateLesson, MemoryItem } from "../../src/shared/types.js";
@@ -289,5 +292,37 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
         );
       });
     });
+  });
+});
+
+describe("candidate retention", () => {
+  it("keeps the newest candidates within the configured limit", async () => {
+    await withTempDir(async (home) => {
+      for (let n = 1; n <= 3; n++) {
+        await saveCandidate(
+          mockCandidate({
+            id: `retention-${n}`,
+            createdAt: `2026-09-0${n}T00:00:00Z`,
+          }),
+          home,
+        );
+      }
+      expect(await trimCandidates(home, 2)).toBe(1);
+      expect((await listCandidates(home)).map((c) => c.id).sort()).toEqual([
+        "retention-2",
+        "retention-3",
+      ]);
+    });
+  });
+});
+
+it("falls back for fractional candidate limits", async () => {
+  await withTempDir(async (root) => {
+    await runInit(root);
+    await writeFile(
+      join(root, ".burr", "config.json"),
+      JSON.stringify({ memory: { maxCandidates: 2.5 } }),
+    );
+    expect((await loadConfig(root)).memory.maxCandidates).toBe(100);
   });
 });

@@ -4,6 +4,7 @@ import {
   mergeCandidate,
   promoteCandidate,
   saveCandidate,
+  trimCandidates,
 } from "../learning/consolidator.js";
 import { reflectOnSession } from "../learning/reflection.js";
 import {
@@ -101,7 +102,7 @@ export interface CodexSessionEndResult {
 
 export async function handlePreToolUse(
   input: CodexPreToolUseInput,
-  options: { home?: string; root?: string } = {},
+  options: { home?: string; root?: string; harness?: string } = {},
 ): Promise<CodexPreToolUseResult> {
   const home = options.home ?? userHome();
   const root = options.root ?? process.cwd();
@@ -132,7 +133,7 @@ export async function handlePreToolUse(
   if (loopResult.level === "block") {
     await recordAction(home, {
       sessionId: input.sessionId,
-      harness: "codex",
+      harness: options.harness ?? "codex",
       tool: input.tool,
       normalizedArgs,
       inputFingerprint: inputFp,
@@ -145,7 +146,7 @@ export async function handlePreToolUse(
       {
         sessionId: input.sessionId,
         type: "action_blocked",
-        harness: "codex",
+        harness: options.harness ?? "codex",
         tool: input.tool,
         data: { score: loopResult.score, reasons: loopResult.reasons },
       },
@@ -156,7 +157,7 @@ export async function handlePreToolUse(
       {
         sessionId: input.sessionId,
         type: "loop_detected",
-        harness: "codex",
+        harness: options.harness ?? "codex",
         tool: input.tool,
         data: { score: loopResult.score, reasons: loopResult.reasons },
       },
@@ -179,7 +180,7 @@ export async function handlePreToolUse(
       {
         sessionId: input.sessionId,
         type: "loop_detected",
-        harness: "codex",
+        harness: options.harness ?? "codex",
         tool: input.tool,
         data: { score: loopResult.score, reasons: loopResult.reasons },
       },
@@ -199,7 +200,7 @@ export async function handlePreToolUse(
 
 export async function handlePostToolUse(
   input: CodexPostToolUseInput,
-  options: { home?: string; root?: string } = {},
+  options: { home?: string; root?: string; harness?: string } = {},
 ): Promise<CodexPostToolUseResult> {
   const home = options.home ?? userHome();
   const config = await loadConfig(options.root ?? process.cwd());
@@ -225,7 +226,7 @@ export async function handlePostToolUse(
 
   await recordAction(home, {
     sessionId: input.sessionId,
-    harness: "codex",
+    harness: options.harness ?? "codex",
     tool: input.tool,
     normalizedArgs,
     inputFingerprint: inputFp,
@@ -243,7 +244,7 @@ export async function handlePostToolUse(
     {
       sessionId: input.sessionId,
       type: "tool_call",
-      harness: "codex",
+      harness: options.harness ?? "codex",
       tool: input.tool,
       data: {
         status,
@@ -263,7 +264,7 @@ export async function handlePostToolUse(
 
 export async function handleSessionStart(
   input: CodexSessionStartInput,
-  options: { home?: string; root?: string } = {},
+  options: { home?: string; root?: string; harness?: string } = {},
 ): Promise<CodexSessionStartResult> {
   const home = options.home ?? userHome();
   const root = options.root ?? input.root ?? process.cwd();
@@ -281,7 +282,7 @@ export async function handleSessionStart(
     {
       sessionId: input.sessionId,
       type: "session_start",
-      harness: "codex",
+      harness: options.harness ?? "codex",
       data: { taskDescription: input.taskDescription, scope: input.scope },
     },
     home,
@@ -314,7 +315,7 @@ export async function handleSessionStart(
       {
         sessionId: input.sessionId,
         type: "hit",
-        harness: "codex",
+        harness: options.harness ?? "codex",
         data: { count: retrieved.length },
       },
       home,
@@ -324,7 +325,7 @@ export async function handleSessionStart(
       {
         sessionId: input.sessionId,
         type: "miss",
-        harness: "codex",
+        harness: options.harness ?? "codex",
       },
       home,
     );
@@ -341,7 +342,7 @@ export async function handleSessionStart(
 
 export async function handleSessionEnd(
   input: CodexSessionEndInput,
-  options: { home?: string; root?: string } = {},
+  options: { home?: string; root?: string; harness?: string } = {},
 ): Promise<CodexSessionEndResult> {
   const home = options.home ?? userHome();
   const config = await loadConfig(options.root ?? input.root ?? process.cwd());
@@ -360,7 +361,7 @@ export async function handleSessionEnd(
     {
       sessionId: input.sessionId,
       type: "verification",
-      harness: "codex",
+      harness: options.harness ?? "codex",
       data: { verified: input.verified, command: input.verificationCommand },
     },
     home,
@@ -370,7 +371,7 @@ export async function handleSessionEnd(
     {
       sessionId: input.sessionId,
       type: "session_end",
-      harness: "codex",
+      harness: options.harness ?? "codex",
       data: { verified: input.verified },
     },
     home,
@@ -421,11 +422,12 @@ export async function handleSessionEnd(
 
   for (const candidate of reflection.candidates) {
     await saveCandidate(candidate, home);
+    await trimCandidates(home, config.memory.maxCandidates);
     await recordMetricsEvent(
       {
         sessionId: input.sessionId,
         type: "candidate_created",
-        harness: "codex",
+        harness: options.harness ?? "codex",
         data: { candidateId: candidate.id, type: candidate.type },
       },
       home,
@@ -441,7 +443,7 @@ export async function handleSessionEnd(
         {
           sessionId: input.sessionId,
           type: "memory_promoted",
-          harness: "codex",
+          harness: options.harness ?? "codex",
           data: { memoryId: promoted.id, statement: promoted.statement },
         },
         home,
@@ -453,7 +455,7 @@ export async function handleSessionEnd(
         {
           sessionId: input.sessionId,
           type: "memory_merged",
-          harness: "codex",
+          harness: options.harness ?? "codex",
           data: {
             candidateId: candidate.id,
             targetMemoryId: admission.targetMemoryId,
@@ -466,7 +468,7 @@ export async function handleSessionEnd(
         {
           sessionId: input.sessionId,
           type: "candidate_discarded",
-          harness: "codex",
+          harness: options.harness ?? "codex",
           data: { candidateId: candidate.id, reason: admission.reason },
         },
         home,

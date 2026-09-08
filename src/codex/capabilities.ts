@@ -1,11 +1,12 @@
 import type { BurrHarnessCapabilities } from "../shared/types.js";
 
+// Capabilities of the shipped adapters when loaded by their host.
 export const HARNESS_CAPABILITIES: Record<string, BurrHarnessCapabilities> = {
   codex: {
     name: "OpenAI Codex",
-    beforeToolObservation: true,
-    afterToolObservation: true,
-    blocking: true,
+    beforeToolObservation: false,
+    afterToolObservation: false,
+    blocking: false,
     contextInjection: true,
   },
   "claude-code": {
@@ -17,9 +18,9 @@ export const HARNESS_CAPABILITIES: Record<string, BurrHarnessCapabilities> = {
   },
   opencode: {
     name: "OpenCode",
-    beforeToolObservation: false,
-    afterToolObservation: false,
-    blocking: false,
+    beforeToolObservation: true,
+    afterToolObservation: true,
+    blocking: true,
     contextInjection: true,
   },
   cursor: {
@@ -32,13 +33,15 @@ export const HARNESS_CAPABILITIES: Record<string, BurrHarnessCapabilities> = {
   pi: {
     name: "Pi",
     beforeToolObservation: true,
-    afterToolObservation: false,
-    blocking: false,
+    afterToolObservation: true,
+    blocking: true,
     contextInjection: true,
   },
 };
 
-export function getHarnessCapabilities(harness: string): BurrHarnessCapabilities {
+export function getHarnessCapabilities(
+  harness: string,
+): BurrHarnessCapabilities {
   const key = harness.toLowerCase().trim();
   return (
     HARNESS_CAPABILITIES[key] ?? {

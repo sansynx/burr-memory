@@ -28,8 +28,18 @@ function parseMode(val: unknown): Mode {
   return val === "strict" || val === "off" || val === "on" ? val : "on";
 }
 
-function parseNumber(val: unknown, fallback: number, min = 0, max = Infinity): number {
-  if (typeof val === "number" && !Number.isNaN(val) && val >= min && val <= max) {
+function parseNumber(
+  val: unknown,
+  fallback: number,
+  min = 0,
+  max = Infinity,
+): number {
+  if (
+    typeof val === "number" &&
+    !Number.isNaN(val) &&
+    val >= min &&
+    val <= max
+  ) {
     return val;
   }
   return fallback;
@@ -45,28 +55,71 @@ export async function loadConfig(root: string): Promise<BurrConfig> {
     }
 
     const mode = parseMode(parsed.mode);
-    const runtimeRaw = (parsed.runtime && typeof parsed.runtime === "object" ? parsed.runtime : {}) as Record<
-      string,
-      unknown
-    >;
-    const memoryRaw = (parsed.memory && typeof parsed.memory === "object" ? parsed.memory : {}) as Record<
-      string,
-      unknown
-    >;
+    const runtimeRaw = (
+      parsed.runtime && typeof parsed.runtime === "object" ? parsed.runtime : {}
+    ) as Record<string, unknown>;
+    const memoryRaw = (
+      parsed.memory && typeof parsed.memory === "object" ? parsed.memory : {}
+    ) as Record<string, unknown>;
 
     const runtime: RuntimeConfig = {
-      enabled: typeof runtimeRaw.enabled === "boolean" ? runtimeRaw.enabled : DEFAULT_RUNTIME_CONFIG.enabled,
-      warnScore: parseNumber(runtimeRaw.warnScore, DEFAULT_RUNTIME_CONFIG.warnScore, 0, 100),
-      blockScore: parseNumber(runtimeRaw.blockScore, DEFAULT_RUNTIME_CONFIG.blockScore, 0, 100),
-      fuzzyThreshold: parseNumber(runtimeRaw.fuzzyThreshold, DEFAULT_RUNTIME_CONFIG.fuzzyThreshold, 0, 1),
-      recentWindow: parseNumber(runtimeRaw.recentWindow, DEFAULT_RUNTIME_CONFIG.recentWindow, 1, 100),
+      enabled:
+        typeof runtimeRaw.enabled === "boolean"
+          ? runtimeRaw.enabled
+          : DEFAULT_RUNTIME_CONFIG.enabled,
+      warnScore: parseNumber(
+        runtimeRaw.warnScore,
+        DEFAULT_RUNTIME_CONFIG.warnScore,
+        0,
+        100,
+      ),
+      blockScore: parseNumber(
+        runtimeRaw.blockScore,
+        DEFAULT_RUNTIME_CONFIG.blockScore,
+        0,
+        100,
+      ),
+      fuzzyThreshold: parseNumber(
+        runtimeRaw.fuzzyThreshold,
+        DEFAULT_RUNTIME_CONFIG.fuzzyThreshold,
+        0,
+        1,
+      ),
+      recentWindow: parseNumber(
+        runtimeRaw.recentWindow,
+        DEFAULT_RUNTIME_CONFIG.recentWindow,
+        1,
+        100,
+      ),
     };
 
     const memory: MemoryConfig = {
-      maxRetrieved: parseNumber(memoryRaw.maxRetrieved, DEFAULT_MEMORY_CONFIG.maxRetrieved, 1, 20),
-      runRetentionDays: parseNumber(memoryRaw.runRetentionDays, DEFAULT_MEMORY_CONFIG.runRetentionDays, 1, 365),
-      maxCandidates: parseNumber(memoryRaw.maxCandidates, DEFAULT_MEMORY_CONFIG.maxCandidates, 1, 1000),
-      archiveAfterDays: parseNumber(memoryRaw.archiveAfterDays, DEFAULT_MEMORY_CONFIG.archiveAfterDays, 1, 365),
+      maxRetrieved: parseNumber(
+        memoryRaw.maxRetrieved,
+        DEFAULT_MEMORY_CONFIG.maxRetrieved,
+        1,
+        20,
+      ),
+      runRetentionDays: parseNumber(
+        memoryRaw.runRetentionDays,
+        DEFAULT_MEMORY_CONFIG.runRetentionDays,
+        1,
+        365,
+      ),
+      maxCandidates: parseNumber(
+        Number.isInteger(memoryRaw.maxCandidates)
+          ? memoryRaw.maxCandidates
+          : undefined,
+        DEFAULT_MEMORY_CONFIG.maxCandidates,
+        1,
+        1000,
+      ),
+      archiveAfterDays: parseNumber(
+        memoryRaw.archiveAfterDays,
+        DEFAULT_MEMORY_CONFIG.archiveAfterDays,
+        1,
+        365,
+      ),
     };
 
     return { mode, runtime, memory };
@@ -75,7 +128,10 @@ export async function loadConfig(root: string): Promise<BurrConfig> {
   }
 }
 
-export async function saveConfig(root: string, partial: Partial<BurrConfig>): Promise<BurrConfig> {
+export async function saveConfig(
+  root: string,
+  partial: Partial<BurrConfig>,
+): Promise<BurrConfig> {
   await ensureStore(root);
   const current = await loadConfig(root);
   const dest = join(root, ".burr", "config.json");
