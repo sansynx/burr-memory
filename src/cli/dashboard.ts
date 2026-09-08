@@ -1,7 +1,10 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { listAllMemories } from "../learning/consolidator.js";
-import { computeBurrStats, computeLearningProgression } from "../metrics/tracker.js";
+import {
+  computeBurrStats,
+  computeLearningProgression,
+} from "../metrics/tracker.js";
 import { listRuns, loadRun } from "../runtime/action-ledger.js";
 import { userHome } from "../shared/home.js";
 
@@ -12,6 +15,7 @@ function renderHtml(): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Burr Dashboard | Local Learning & Reliability Runtime</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%20role%3D%22img%22%20aria-label%3D%22Burr%22%3E%0A%20%20%3Crect%20width%3D%22128%22%20height%3D%22128%22%20fill%3D%22%230F0F0E%22%2F%3E%0A%20%20%3Cg%20transform%3D%22translate%2864%2064%29%22%3E%0A%20%20%20%20%3Cg%20fill%3D%22%23F4EEE7%22%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%2815%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%28105%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%28150%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%28195%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%28240%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%28285%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20transform%3D%22rotate%2860%29%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%3C%2Fg%3E%0A%20%20%20%20%3Cpath%20transform%3D%22rotate%28330%29%22%20fill%3D%22%23FF5A1F%22%20d%3D%22M4.6-16.2%20C6.4-28%207.2-38%205.4-46.2%20C12.8-44.6%2016.2-40.4%2014.8-33.6%20L8.8-16.4%20Z%22%2F%3E%0A%20%20%20%20%3Ccircle%20r%3D%2217.5%22%20fill%3D%22%23F4EEE7%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E%0A">
   <style>
     :root {
       --ink: #0F0F0E;
@@ -105,13 +109,13 @@ function renderHtml(): string {
         </div>
       </div>
       <div>
-        <span class="badge">127.0.0.1:4747 • Local Mode</span>
+        <span class="badge" id="localAddress">Local Mode</span>
       </div>
     </header>
 
     <div class="grid" id="statsGrid">
       <div class="card"><div class="card-title">Active Memories</div><div class="card-val" id="activeMemories">-</div><div class="card-sub" id="hitRateSub">Hit rate: -%</div></div>
-      <div class="card"><div class="card-title">Candidates Awaiting Admission</div><div class="card-val" id="candidates">-</div><div class="card-sub">Zero unverified leakage</div></div>
+      <div class="card"><div class="card-title">Candidates Awaiting Admission</div><div class="card-val" id="candidates">-</div><div class="card-sub">Caller verification required</div></div>
       <div class="card"><div class="card-title">Loops Prevented</div><div class="card-val" id="loopsDetected">-</div><div class="card-sub" id="blockedSub">- blocked</div></div>
       <div class="card"><div class="card-title">Verified Recoveries</div><div class="card-val" id="verifiedRecoveries">-</div><div class="card-sub" id="reusedSub">- reused</div></div>
     </div>
@@ -177,6 +181,10 @@ function renderHtml(): string {
   </div>
 
   <script>
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    document.getElementById('localAddress').innerText = location.host + ' | Local Mode';
     async function refreshDashboard() {
       try {
         const statsRes = await fetch('/api/stats');
@@ -222,12 +230,12 @@ function renderHtml(): string {
         if (memories && memories.length > 0) {
           document.getElementById('memoriesTable').innerHTML = memories.map(m => \`
             <tr>
-              <td><code>\${m.id}</code></td>
-              <td><span class="tag tag-ember">\${m.type}</span></td>
-              <td>\${m.scope.repository || m.scope.level}</td>
+              <td><code>\${escapeHtml(m.id)}</code></td>
+              <td><span class="tag tag-ember">\${escapeHtml(m.type)}</span></td>
+              <td>\${escapeHtml(m.scope.repo || m.scope.repository || m.scope.level)}</td>
               <td>\${Math.round(m.confidence * 100)}%</td>
-              <td>\${m.statement || m.title}</td>
-              <td><span class="tag tag-green">\${m.evidence.successfulReuse}</span> / <span class="tag tag-red">\${m.evidence.failedReuse}</span></td>
+              <td>\${escapeHtml(m.statement || m.title)}</td>
+              <td><span class="tag tag-green">\${escapeHtml(m.evidence.successfulReuse)}</span> / <span class="tag tag-red">\${escapeHtml(m.evidence.failedReuse)}</span></td>
             </tr>
           \`).join('');
         } else {
@@ -240,11 +248,11 @@ function renderHtml(): string {
         if (runs && runs.length > 0) {
           document.getElementById('runsTable').innerHTML = runs.map(r => \`
             <tr>
-              <td><code>\${r.sessionId}</code></td>
-              <td><span class="tag tag-blue">\${r.harness}</span></td>
-              <td>\${r.toolCalls}</td>
-              <td>\${r.failedCalls}</td>
-              <td>\${r.loopsDetected}</td>
+              <td><code>\${escapeHtml(r.sessionId)}</code></td>
+              <td><span class="tag tag-blue">\${escapeHtml(r.harness)}</span></td>
+              <td>\${escapeHtml(r.toolCalls)}</td>
+              <td>\${escapeHtml(r.failedCalls)}</td>
+              <td>\${escapeHtml(r.loopsDetected)}</td>
               <td>\${Math.round(r.durationMs / 1000)}s</td>
               <td>\${r.verified ? '<span class="tag tag-green">Verified</span>' : '<span class="tag tag-red">Unverified</span>'}</td>
             </tr>
@@ -268,64 +276,104 @@ function renderHtml(): string {
 export async function runDashboard(
   options: { port?: number; home?: string } = {},
 ): Promise<number> {
-  const port = options.port ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 4747);
+  const port =
+    options.port ?? (process.env.PORT ? Number(process.env.PORT) : 4747);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error("Dashboard port must be an integer between 0 and 65535.");
+  }
   const home = options.home ?? userHome();
 
-  const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    const url = new URL(req.url || "/", "http://127.0.0.1");
-    const pathname = url.pathname;
+  const server = createServer(
+    async (req: IncomingMessage, res: ServerResponse) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      const address = server.address();
+      const activePort =
+        address && typeof address !== "string" ? address.port : port;
+      const hosts = [`127.0.0.1:${activePort}`, `localhost:${activePort}`];
+      if (
+        !hosts.includes(req.headers.host ?? "") ||
+        (req.headers.origin &&
+          req.headers.origin !== `http://${req.headers.host}`) ||
+        req.headers["sec-fetch-site"] === "cross-site"
+      ) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("Forbidden");
+        return;
+      }
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        res.writeHead(405, { Allow: "GET, HEAD" });
+        res.end();
+        return;
+      }
+      try {
+        const url = new URL(req.url || "/", "http://127.0.0.1");
+        const pathname = url.pathname;
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Cache-Control", "no-cache");
+        if (pathname === "/") {
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          res.end(renderHtml());
+          return;
+        }
 
-    if (pathname === "/") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(renderHtml());
-      return;
-    }
+        if (pathname === "/api/stats") {
+          const stats = await computeBurrStats(home);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(stats));
+          return;
+        }
 
-    if (pathname === "/api/stats") {
-      const stats = await computeBurrStats(home);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(stats));
-      return;
-    }
+        if (pathname === "/api/progression") {
+          const prog = await computeLearningProgression(home);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(prog));
+          return;
+        }
 
-    if (pathname === "/api/progression") {
-      const prog = await computeLearningProgression(home);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(prog));
-      return;
-    }
+        if (pathname === "/api/memories") {
+          const memories = await listAllMemories(home);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(memories));
+          return;
+        }
 
-    if (pathname === "/api/memories") {
-      const memories = await listAllMemories(home);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(memories));
-      return;
-    }
+        if (pathname === "/api/runs") {
+          const runIds = await listRuns(home);
+          const runs = await Promise.all(
+            runIds
+              .slice(-20)
+              .reverse()
+              .map((id) => loadRun(home, id)),
+          );
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(runs.filter(Boolean)));
+          return;
+        }
 
-    if (pathname === "/api/runs") {
-      const runIds = await listRuns(home);
-      const runs = await Promise.all(runIds.slice(-20).reverse().map((id) => loadRun(home, id)));
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(runs.filter(Boolean)));
-      return;
-    }
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not found");
+      } catch {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("Unable to read local dashboard data.");
+      }
+    },
+  );
 
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("Not found");
-  });
-
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const stop = () => server.close(() => resolve(0));
+    server.once("close", () => process.removeListener("SIGINT", stop));
+    server.once("error", (error) => {
+      process.removeListener("SIGINT", stop);
+      reject(error);
+    });
     server.listen(port, "127.0.0.1", () => {
-      console.log(`Burr Dashboard running at http://127.0.0.1:${port}/`);
+      const address = server.address();
+      const activePort =
+        address && typeof address !== "string" ? address.port : port;
+      console.log(`Burr Dashboard running at http://127.0.0.1:${activePort}/`);
       console.log("Press Ctrl+C to stop.");
     });
 
-    process.on("SIGINT", () => {
-      server.close();
-      resolve(0);
-    });
+    process.once("SIGINT", stop);
   });
 }

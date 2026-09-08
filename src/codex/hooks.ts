@@ -6,7 +6,10 @@ import {
   saveCandidate,
 } from "../learning/consolidator.js";
 import { reflectOnSession } from "../learning/reflection.js";
-import { formatRetrievedMemoriesForContext, retrieveRelevantMemories } from "../learning/retrieval.js";
+import {
+  formatRetrievedMemoriesForContext,
+  retrieveRelevantMemories,
+} from "../learning/retrieval.js";
 import { recordMetricsEvent } from "../metrics/tracker.js";
 import { getSessionActions, recordAction } from "../runtime/action-ledger.js";
 import {
@@ -166,7 +169,8 @@ export async function handlePreToolUse(
       score: loopResult.score,
       reasons: loopResult.reasons,
       message: `[Burr Loop Guard] Repetitive non-progress action blocked (score: ${loopResult.score}/100, reasons: ${loopResult.reasons.join(", ")}). You are stuck in a repetitive cycle with "${input.tool}". Change strategy or check targeted test output.`,
-      suggestedAction: "Inspect recent error message, run a targeted test, or examine a different module.",
+      suggestedAction:
+        "Inspect recent error message, run a targeted test, or examine a different module.",
     };
   }
 
@@ -198,10 +202,21 @@ export async function handlePostToolUse(
   options: { home?: string; root?: string } = {},
 ): Promise<CodexPostToolUseResult> {
   const home = options.home ?? userHome();
+  const config = await loadConfig(options.root ?? process.cwd());
+  if (config.mode === "off" || !config.runtime.enabled) {
+    return { success: true, stagnationDetected: false, outputFingerprint: "" };
+  }
   const normalizedArgs = canonicalize(input.args);
   const inputFp = fingerprintInput(input.tool, normalizedArgs);
   const outputFp = fingerprintOutput(input.output);
-  const redactedSnippet = clip(redact(typeof input.output === "string" ? input.output : JSON.stringify(input.output)), 1000);
+  const redactedSnippet = clip(
+    redact(
+      typeof input.output === "string"
+        ? input.output
+        : JSON.stringify(input.output),
+    ),
+    1000,
+  );
 
   const recentActions = await getSessionActions(home, input.sessionId);
   const stagnation = detectOutputStagnation(recentActions);
@@ -230,7 +245,11 @@ export async function handlePostToolUse(
       type: "tool_call",
       harness: "codex",
       tool: input.tool,
-      data: { status, durationMs: input.durationMs, stagnation: stagnation.detected },
+      data: {
+        status,
+        durationMs: input.durationMs,
+        stagnation: stagnation.detected,
+      },
     },
     home,
   );
@@ -247,8 +266,16 @@ export async function handleSessionStart(
   options: { home?: string; root?: string } = {},
 ): Promise<CodexSessionStartResult> {
   const home = options.home ?? userHome();
-  const root = options.root ?? process.cwd();
+  const root = options.root ?? input.root ?? process.cwd();
   const config = await loadConfig(root);
+
+  if (config.mode === "off") {
+    return {
+      sessionId: input.sessionId,
+      retrievedMemories: [],
+      injectedPrompt: "",
+    };
+  }
 
   await recordMetricsEvent(
     {
@@ -260,18 +287,12 @@ export async function handleSessionStart(
     home,
   );
 
-  if (config.mode === "off") {
-    return {
-      sessionId: input.sessionId,
-      retrievedMemories: [],
-      injectedPrompt: "",
-    };
-  }
-
   const rawScope = input.scope as (MemoryScope & { repo?: string }) | undefined;
   const normalizedScope: MemoryScope | undefined = rawScope
     ? {
-        level: rawScope.level ?? (rawScope.repository || rawScope.repo ? "repository" : "global"),
+        level:
+          rawScope.level ??
+          (rawScope.repository || rawScope.repo ? "repository" : "global"),
         repository: rawScope.repository || rawScope.repo,
         language: rawScope.language,
         framework: rawScope.framework,
@@ -323,6 +344,17 @@ export async function handleSessionEnd(
   options: { home?: string; root?: string } = {},
 ): Promise<CodexSessionEndResult> {
   const home = options.home ?? userHome();
+  const config = await loadConfig(options.root ?? input.root ?? process.cwd());
+  if (config.mode === "off") {
+    return {
+      sessionId: input.sessionId,
+      verified: input.verified,
+      candidatesGenerated: 0,
+      memoriesPromoted: 0,
+      memoriesMerged: 0,
+      candidates: [],
+    };
+  }
 
   await recordMetricsEvent(
     {
@@ -355,9 +387,13 @@ export async function handleSessionEnd(
     };
   }
 
-  const rawEndScope = (input.scope ?? { level: "global" }) as MemoryScope & { repo?: string };
+  const rawEndScope = (input.scope ?? { level: "global" }) as MemoryScope & {
+    repo?: string;
+  };
   const defaultScope: MemoryScope = {
-    level: rawEndScope.level ?? (rawEndScope.repository || rawEndScope.repo ? "repository" : "global"),
+    level:
+      rawEndScope.level ??
+      (rawEndScope.repository || rawEndScope.repo ? "repository" : "global"),
     repository: rawEndScope.repository || rawEndScope.repo,
     language: rawEndScope.language,
     framework: rawEndScope.framework,
@@ -418,7 +454,10 @@ export async function handleSessionEnd(
           sessionId: input.sessionId,
           type: "memory_merged",
           harness: "codex",
-          data: { candidateId: candidate.id, targetMemoryId: admission.targetMemoryId },
+          data: {
+            candidateId: candidate.id,
+            targetMemoryId: admission.targetMemoryId,
+          },
         },
         home,
       );
@@ -445,12 +484,17 @@ export async function handleSessionEnd(
   };
 }
 
-export function handlePreCompact(_context: { systemPrompt?: string }): { preservedNotes: string } {
+export function handlePreCompact(_context: { systemPrompt?: string }): {
+  preservedNotes: string;
+} {
   return {
-    preservedNotes: "Burr runtime guard and memory state active. Retain verified rules and tool strategies.",
+    preservedNotes:
+      "Burr runtime guard and memory state active. Retain verified rules and tool strategies.",
   };
 }
 
-export function handlePostCompact(_event: { systemPrompt?: string }): { updatedPrompt?: string } {
+export function handlePostCompact(_event: { systemPrompt?: string }): {
+  updatedPrompt?: string;
+} {
   return {};
 }

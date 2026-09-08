@@ -1,127 +1,66 @@
 # Burr
 
-> Local debugging memory and deterministic loop guard for AI coding agents.
+Burr is local debugging memory for coding agents. No account, hosted memory, or outbound telemetry.
 
-Burr is a lightweight, zero-cloud runtime that gives coding agents persistent memory across sessions and prevents repetitive tool loops.
+## Install
 
-- Repository: https://github.com/sansynx/burr-memory
-- Package: burr-memory (npm)
-- License: MIT
-- Runtime Dependencies: 0 (Node.js built-ins only)
-- Telemetry: 0 (100% offline and local)
+Global: install `burr-memory` globally, then run `burr global`.
+Project: install `burr-memory` as a dev dependency, then run the installed `burr init` binary.
+The package is named `burr-memory`; its executable is `burr`.
 
-## Why Burr Exists
+## Debugging workflow
 
-1. **Current-Session Looping**: Agents get stuck in cycles (repeating failing commands, cyclic grep/test patterns, stagnant outputs) because LLMs lack meta-observability over their own trajectory.
-2. **Cross-Session Amnesia**: Once a context window compacts or a session ends, hard-won debugging insights disappear. Future agents repeat the same mistakes.
+1. Search shared playbooks before guessing a fix: `burr search "error text"`.
+2. Capture a reusable failure: `burr capture --error "error text" --command "test command"`.
+3. Run verification, then save a fix: `burr resolve --error "..." --cause "..." --fix "..." --verify "command and result"`.
+4. Inspect CLI usage with `burr audit`. Use `burr on`, `burr strict`, or `burr off` for project mode.
 
-Burr solves both:
-- Deterministic Loop Guard stops runaway execution loops on Turn 4 without secondary LLM calls.
-- Shared Memory (`~/.burr/memory/`) lets one agent learn a fix once, so every future agent in any repository reuses the verified playbook.
+The caller is responsible for truthful verification. Burr does not execute the verification command. Strict mode instructs the agent to search first; it is not a universal edit blocker.
 
-## Quick Start
+## Storage
 
-### Global (All Projects on Machine)
-```bash
-npm install -g burr-memory
-burr global
-```
+- `~/.burr/memory/playbooks/`: CLI Markdown playbooks and runtime Markdown exports.
+- `~/.burr/memory/signals/`: reusable CLI failures.
+- `~/.burr/memory/knowledge/`: runtime knowledge, playbook records, repository rules, and avoid lessons.
+- `~/.burr/memory/tool-strategies/`: runtime strategies.
+- `~/.burr/candidates/`, `archive/`, `runs/`, `metrics/`: runtime records.
+- `<project>/.burr/`: project config, instructions, generated skills, and CLI usage.
 
-### Local (Single Repository)
-```bash
-npx burr init
-```
+`burr init` appends `.burr/` to the project gitignore. Preserve team-owned editor configuration; decide separately which generated host copies to ignore.
 
-## CLI Commands
+## Hosts
 
-- `burr global`: Enable Burr machine-wide across all user projects.
-- `burr init`: Initialize Burr in current project and update .gitignore.
-- `burr stats`: Display active memories, hit rate, and blocked loops.
-- `burr dashboard`: Launch 100% local web UI at http://127.0.0.1:4747.
-- `burr compare <runA> <runB>`: Side-by-side run efficiency comparison.
-- `burr doctor`: Validate storage integrity and hook readiness.
-- `burr memory list`: Browse active, stale, and archived memories.
-- `burr memory inspect <id>`: View details and evidence for a memory.
-- `burr memory prune`: Apply confidence decay and clean old run ledgers.
+Claude Code uses `/burr-*`, Codex uses `@burr-*`, and Pi uses `/skill:burr-*`. OpenCode loads the bundled plugin. Cursor and Windsurf receive rules. Existing user instructions and edited host files are preserved.
 
-## Memory Architecture
-
-### 1. Global Store (`~/.burr/memory/`)
-Persistent across all repositories on the machine:
-- `playbooks/`: Verified problem-cause-fix-verification records.
-- `signals/`: Reusable failure signatures.
-- `knowledge/`: Repository conventions and environment rules.
-- `tool-strategies/`: Effective tool combinations.
-- `avoid/`: Anti-patterns and trap commands.
-- `archive/`: Stale or demoted memories (decayed after 60 days inactivity).
-
-### 2. Local Project Store (`<repo>/.burr/`)
-Repository-specific configuration:
-- `config.json`: Mode configuration (`on`, `strict`, `off`).
-- `instructions.md`: Instruction body injected for agents.
-- `usage.jsonl`: Local usage log (search, hit, miss, resolve).
-- `skills/`: Project-owned skill definitions.
-
-### Gitignore Policy
-Always gitignore `.burr/` and generated host folders (`.agents/`, `.claude/`, `.cursor/`, `.windsurf/`, `.pi/`, `.opencode/`). Burr manages this automatically in `.gitignore`. Burr never modifies user-owned `AGENTS.md` or `CLAUDE.md`.
-
-## Deterministic Loop Guard
-
-Calculates composite risk score (0 to 100) before every tool call:
-- Exact Repetition (+40): SHA-256 canonical hash of tool and sorted arguments.
-- Fuzzy Repetition (+25): Tokenized Jaccard similarity >= 0.85.
-- Subsequence Cycle (+30): Tool pattern repeats with window length k in [2..6].
-- Output Stagnation (+20): Identical consecutive output hashes.
-- Consecutive Failures (+10): Escalating penalty on repeated failures.
-
-Thresholds:
-- Score < 50: Allow execution.
-- Score 50 to 69: Warn agent with redirection advice.
-- Score >= 70: Hard-block action and force alternative strategy.
-
-## Agent Skills & Workflows
-
-### How an Agent Uses Burr
-1. **Before fixing a bug**: Run `/burr-search query="<error snippet>"` to find existing playbooks.
-2. **When stuck in a loop**: Burr halts the tool call and injects redirection advice.
-3. **After verifying a fix**: Run `/burr-resolve` with error, cause, fix, and verification command.
-
-### Agent Invocation Syntax
-- Claude Code: `/burr-search`, `/burr-resolve`, `/burr-help`, `/burr`
-- OpenAI Codex: `@burr-search`, `@burr-resolve`
-- Cursor & Windsurf: Always-on rules in `.cursor/rules/burr.mdc` and `.windsurf/rules/burr.md`
-- OpenCode: Plugin in `.opencode/plugins/burr.mjs`
-- Pi: Extension in `pi-extension/index.ts`
-
-## Programmatic Node API
+## Runtime API
 
 ```typescript
-import {
-  LoopDetector,
-  detectActionLoop,
-  retrieveMemories,
-  reflectOnSession,
-  admitCandidate,
-  consolidateMemories,
-} from "burr-memory";
+import { LoopDetector } from "burr-memory/api";
 
-// Initialize the deterministic loop detector
-const detector = new LoopDetector();
-
-// Evaluate a proposed tool action before execution
-const check = detector.evaluateAction("run_command", { cmd: "npm test" });
-
+const detector = new LoopDetector({ autoRecord: false });
+const args = { cmd: "npm test" };
+const check = detector.evaluateAction("run_command", args);
 if (check.blocked) {
-  console.warn("Action halted by Burr Loop Guard:", check.reasons);
-  console.info("Suggested redirection:", check.suggestedAction);
+  console.warn(check.reasons, check.suggestedAction);
+} else {
+  // Execute the tool, then record its actual output and status.
+  detector.recordAction("run_command", args, "test output", "completed");
 }
 ```
 
-## Measured Benchmark Results
+The root import is the OpenCode plugin. `/codex` exports lifecycle functions for custom integration; `init` does not automatically register them. Integrations must call the functions and honor blocking decisions. Defaults warn at 50 and block at 70; scores are heuristics, not proof that an action is wrong.
 
-Multi-session benchmark across 4 progressive tasks:
-- Tool Calls: 10 calls (Cold start) -> 2 calls (Mature memory) [-80.0%]
-- Wasted Retries: 3 failed calls -> 0 failed calls [-100%]
-- Loop Interception: Runaway cycling stopped at Turn 4
-- Execution Latency: 194 ms -> 18 ms [-90.7%]
-- Memory Footprint: Bounded under 12 KB (0 noise leakage)
+## Maintenance and diagnostics
+
+`burr stats`, `burr compare <run-a> <run-b>`, and `burr dashboard --port 4747` inspect runtime data. CLI Markdown search and runtime JSON retrieval are separate paths. `burr memory list`, `burr memory inspect <id>`, and `burr memory summary` inspect runtime memories.
+
+Run `burr memory prune` explicitly to mark old memories stale, archive them, and delete expired run history. Defaults are 30 days, 60 days, and seven days respectively. No background scheduler or fixed total storage cap is supplied. `burr doctor` reports directory health and storage counts; it cannot certify host hook registration.
+
+## Evidence
+
+The four-session test in `test/benchmark.test.ts` uses scripted inputs and supplied tool outputs. It is regression coverage, not an independent measurement of agent speed or token savings.
+
+## Links
+
+- Source: https://github.com/sansynx/burr-memory
+- Website: https://sansynx.github.io/burr-site/

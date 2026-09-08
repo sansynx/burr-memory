@@ -1,9 +1,16 @@
-import { readdir, stat, unlink } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { clip } from "../shared/bounds.js";
-import { assertInside, readInside, appendInside, writeInside } from "../shared/fs.js";
+import {
+  assertInside,
+  readInside,
+  appendInside,
+  writeInside,
+  removeInside,
+  withInsideLock,
+} from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
-import { redact } from "../shared/redaction.js";
+import { redact, redactStructured } from "../shared/redaction.js";
 import type { BurrAction, RunSummary } from "../shared/types.js";
 import { ensureUserMemory, userRunsDir } from "../shared/user-memory.js";
 
@@ -16,7 +23,10 @@ export function clearSessionCache(): void {
 }
 
 function cacheSessionActions(sessionId: string, actions: BurrAction[]): void {
-  if (sessionMemoryCache.size >= MAX_CACHED_SESSIONS && !sessionMemoryCache.has(sessionId)) {
+  if (
+    sessionMemoryCache.size >= MAX_CACHED_SESSIONS &&
+    !sessionMemoryCache.has(sessionId)
+  ) {
     const oldestKey = sessionMemoryCache.keys().next().value;
     if (oldestKey) sessionMemoryCache.delete(oldestKey);
   }
@@ -34,58 +44,74 @@ export function runFilePath(home: string, sessionId: string): string {
 
 export async function recordAction(
   home: string | undefined,
-  action: Omit<BurrAction, "sequence" | "timestamp"> & { sequence?: number; timestamp?: string },
+  action: Omit<BurrAction, "sequence" | "timestamp"> & {
+    sequence?: number;
+    timestamp?: string;
+  },
 ): Promise<BurrAction> {
   const resolvedHome = home ?? userHome();
   await ensureUserMemory(resolvedHome);
 
   const sessionId = action.sessionId;
-  let cached = sessionMemoryCache.get(sessionId);
-  if (!cached) {
-    cached = await getSessionActions(resolvedHome, sessionId);
-    cacheSessionActions(sessionId, cached);
-  }
-
-  const sequence = action.sequence ?? (cached.length > 0 ? cached[cached.length - 1]!.sequence + 1 : 1);
-  const timestamp = action.timestamp ?? new Date().toISOString();
-
-  const completeAction: BurrAction = {
-    ...action,
-    sequence,
-    timestamp,
-    outputSnippet: action.outputSnippet ? clip(redact(action.outputSnippet), 1000) : undefined,
-  };
-
-  cached.push(completeAction);
-  if (cached.length > MAX_SESSION_ACTIONS) {
-    cached.splice(0, cached.length - MAX_SESSION_ACTIONS);
-  }
-
   const filePath = runFilePath(resolvedHome, sessionId);
-  const line = `${JSON.stringify(completeAction)}\n`;
+  return withInsideLock(resolvedHome, `${filePath}.lock`, async () => {
+    const persisted = await readStoredActions(resolvedHome, filePath);
+    const sequence =
+      action.sequence ??
+      (persisted.length > 0
+        ? persisted[persisted.length - 1]!.sequence + 1
+        : 1);
+    const timestamp = action.timestamp ?? new Date().toISOString();
 
-  try {
-    assertInside(resolvedHome, filePath);
-    await appendInside(resolvedHome, filePath, line);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await writeInside(resolvedHome, filePath, line);
-    } else {
-      throw error;
+    const completeAction: BurrAction = {
+      ...action,
+      sequence,
+      timestamp,
+      normalizedArgs: redactStructured(action.normalizedArgs),
+      error: action.error ? redact(action.error) : undefined,
+      outputSnippet: action.outputSnippet
+        ? clip(redact(action.outputSnippet), 1000)
+        : undefined,
+    };
+
+    const line = `${JSON.stringify(completeAction)}\n`;
+    try {
+      assertInside(resolvedHome, filePath);
+      await appendInside(resolvedHome, filePath, line);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        await writeInside(resolvedHome, filePath, line);
+      } else {
+        throw error;
+      }
     }
-  }
 
-  return completeAction;
+    persisted.push(completeAction);
+    cacheSessionActions(filePath, persisted.slice(-MAX_SESSION_ACTIONS));
+    return completeAction;
+  });
 }
 
-export async function getSessionActions(home: string | undefined, sessionId: string): Promise<BurrAction[]> {
+export async function getSessionActions(
+  home: string | undefined,
+  sessionId: string,
+): Promise<BurrAction[]> {
   const resolvedHome = home ?? userHome();
-  const cached = sessionMemoryCache.get(sessionId);
+  const filePath = runFilePath(resolvedHome, sessionId);
+  const cached = sessionMemoryCache.get(filePath);
   if (cached && cached.length > 0) {
     return [...cached];
   }
 
-  const filePath = runFilePath(resolvedHome, sessionId);
+  const actions = await readStoredActions(resolvedHome, filePath);
+  cacheSessionActions(filePath, actions.slice(-MAX_SESSION_ACTIONS));
+  return actions;
+}
+
+async function readStoredActions(
+  resolvedHome: string,
+  filePath: string,
+): Promise<BurrAction[]> {
   try {
     const raw = await readInside(resolvedHome, filePath);
     const lines = raw.split(/\r?\n/);
@@ -96,7 +122,11 @@ export async function getSessionActions(home: string | undefined, sessionId: str
       if (!line) continue;
       try {
         const parsed = JSON.parse(line) as BurrAction;
-        if (parsed && typeof parsed.sessionId === "string" && typeof parsed.tool === "string") {
+        if (
+          parsed &&
+          typeof parsed.sessionId === "string" &&
+          typeof parsed.tool === "string"
+        ) {
           actions.push(parsed);
         }
       } catch {
@@ -104,7 +134,6 @@ export async function getSessionActions(home: string | undefined, sessionId: str
       }
     }
 
-    cacheSessionActions(sessionId, actions);
     return actions;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -112,8 +141,15 @@ export async function getSessionActions(home: string | undefined, sessionId: str
   }
 }
 
-export async function loadRun(home: string | undefined, sessionId: string): Promise<RunSummary | null> {
-  const actions = await getSessionActions(home, sessionId);
+export async function loadRun(
+  home: string | undefined,
+  sessionId: string,
+): Promise<RunSummary | null> {
+  const resolvedHome = home ?? userHome();
+  const actions = await readStoredActions(
+    resolvedHome,
+    runFilePath(resolvedHome, sessionId),
+  );
   if (actions.length === 0) return null;
 
   const harness = actions[0]?.harness ?? "unknown";
@@ -136,7 +172,12 @@ export async function loadRun(home: string | undefined, sessionId: string): Prom
     if (a.status === "failed") failedCalls += 1;
     if (a.status === "blocked") blockedCalls += 1;
     if (a.signals?.exactRepeat || a.signals?.fuzzyRepeat) repeatedActions += 1;
-    if (a.signals?.exactRepeat || a.signals?.fuzzyRepeat || a.signals?.cycle || a.signals?.stagnation) {
+    if (
+      a.signals?.exactRepeat ||
+      a.signals?.fuzzyRepeat ||
+      a.signals?.cycle ||
+      a.signals?.stagnation
+    ) {
       loopsDetected += 1;
     }
     if (a.tool.includes("burr-search") || a.tool === "search") {
@@ -188,7 +229,10 @@ export async function listRuns(home?: string): Promise<string[]> {
   }
 }
 
-export async function cleanOldRuns(home: string | undefined, retentionDays = 7): Promise<number> {
+export async function cleanOldRuns(
+  home: string | undefined,
+  retentionDays = 7,
+): Promise<number> {
   const resolvedHome = home ?? userHome();
   const dir = userRunsDir(resolvedHome);
   const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
@@ -203,7 +247,7 @@ export async function cleanOldRuns(home: string | undefined, retentionDays = 7):
         try {
           const st = await stat(full);
           if (now - st.mtimeMs > maxAgeMs) {
-            await unlink(full);
+            await removeInside(resolvedHome, full);
             deleted += 1;
           }
         } catch {

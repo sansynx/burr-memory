@@ -32,8 +32,8 @@ Usage:
   burr stats                   memory, learning, and runtime loop metrics
   burr compare <run-a> <run-b> compare two execution runs
   burr memory [list|inspect|prune] inspect, list, or prune memories
-  burr doctor                  check global memory, Codex hooks, and health
-  burr dashboard               launch local dashboard on http://127.0.0.1:4747
+  burr doctor                  check local memory directories and usage
+  burr dashboard [--port N]     launch local dashboard (default port 4747)
   burr audit                   usage from usage.jsonl
   burr help                    this screen
 
@@ -52,7 +52,11 @@ function flag(args: string[], name: string): string | undefined {
 function flags(args: string[], name: string): string[] {
   const values: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === `--${name}` && args[i + 1] && !args[i + 1]!.startsWith("--")) {
+    if (
+      args[i] === `--${name}` &&
+      args[i + 1] &&
+      !args[i + 1]!.startsWith("--")
+    ) {
       values.push(args[i + 1]!);
       i += 1;
     }
@@ -71,7 +75,10 @@ function restAfter(args: string[], command: string): string {
 
 export async function main(argv: string[]): Promise<number> {
   const [command = "help", ...args] = argv;
-  const cwd = command === "init" && args[0] && !args[0].startsWith("-") ? resolve(args[0]) : process.cwd();
+  const cwd =
+    command === "init" && args[0] && !args[0].startsWith("-")
+      ? resolve(args[0])
+      : process.cwd();
 
   if (command === "help" || command === "--help" || command === "-h") {
     console.log(HELP);
@@ -101,7 +108,9 @@ export async function main(argv: string[]): Promise<number> {
         `mode ${current.mode} · ${current.playbooks} playbooks · ${current.signals} signals`,
       );
       if (current.lastHit) {
-        console.log(`last hit ${current.lastHit.ts} ${current.lastHit.path ?? ""}`.trim());
+        console.log(
+          `last hit ${current.lastHit.ts} ${current.lastHit.path ?? ""}`.trim(),
+        );
       }
       return 0;
     } catch {
@@ -155,7 +164,9 @@ export async function main(argv: string[]): Promise<number> {
     const fix = flag(args, "fix");
     const verification = flag(args, "verify") ?? flag(args, "verification");
     if (!error || !rootCause || !fix || !verification) {
-      console.error("burr resolve --error <text> --cause <text> --fix <text> --verify <text>");
+      console.error(
+        "burr resolve --error <text> --cause <text> --fix <text> --verify <text>",
+      );
       return 1;
     }
     const result = await resolvePlaybook(cwd, {
@@ -239,7 +250,17 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   if (command === "dashboard") {
-    return await runDashboard();
+    const value = flag(args, "port");
+    if (
+      args.includes("--port") &&
+      (!value || !/^\d+$/.test(value) || Number(value) > 65535)
+    ) {
+      console.error("burr dashboard --port <integer from 0 to 65535>");
+      return 1;
+    }
+    return await runDashboard({
+      port: value === undefined ? undefined : Number(value),
+    });
   }
 
   console.log(HELP);
@@ -247,7 +268,11 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 const invoked = process.argv[1]?.replaceAll("\\", "/");
-if (invoked && /(?:^|\/)(?:index|cli)(?:\.(?:js|ts))?$/.test(invoked) && !process.env.VITEST) {
+if (
+  invoked &&
+  /(?:^|\/)(?:index|cli)(?:\.(?:js|ts))?$/.test(invoked) &&
+  !process.env.VITEST
+) {
   main(process.argv.slice(2)).then(
     (code) => {
       process.exitCode = code;

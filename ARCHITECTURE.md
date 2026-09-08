@@ -1,333 +1,49 @@
-# Burr: System Architecture & Design
+# Burr architecture
 
-> **Product:** Burr  
-> **Tagline:** Agents that remember how they got unstuck.  
-> **Repository:** [https://github.com/sansynx/burr-memory](https://github.com/sansynx/burr-memory)  
-> **Package:** `burr-memory` (npm)
+Burr stores debugging memory on the local machine. It has two entry paths.
 
----
+## Skills and CLI
 
-## Executive Summary
+`skills/` and `templates/` define the agent workflow. `burr init` copies owned files into a project; `burr global` installs home-level rules. Existing user instructions and edited copies are preserved.
 
-Autonomous coding agents routinely fail in two distinct ways:
-1. **Current-session looping:** When an approach fails, agents repeatedly retry minor variations of failing commands, grep in circles, or emit stagnant outputs without recognizing that they are stuck.
-2. **Cross-session amnesia:** Once a session ends or context is compacted, hard-won insights vanish. A fresh agent starting on the same repository repeats identical exploration mistakes and crashes into the same pitfalls.
+`src/shared/memory.ts` implements search, capture, resolve, and promotion. Signals and verified playbooks are Markdown files under `~/.burr/memory/`. A project's `.burr/` holds config, instructions, generated skills, and a usage ledger.
 
-**Burr** solves both problems as a **local learning and reliability runtime for coding agents**, operating as an independent, offline memory layer across any agent harness (Claude Code, OpenAI Codex, Cursor, Windsurf, OpenCode, Pi, or custom orchestrators).
+## Optional runtime integration
 
-Burr operates on a strict rule: **One agent learns something once. The next agent must not repeat the same debugging or tool-usage mistakes.**
+The `/api`, `/runtime`, `/learning`, and `/codex` package exports expose the runtime. The root export is the OpenCode plugin.
 
-```text
-TASK
- │
- v
-Agent starts working (Agent Session)
- │
- v
-Search Burr local memory (top-k scoped match)
- │
- v
-Perform tool calls
- │
- v
-Burr runtime ledger records action & checks loop risk
- │
- ├── Loop risk >= 50? ──► Emit warning & suggest redirection
- └── Loop risk >= 70? ──► Block action & force alternate path
- │
- v
-Task completed & verified?
- │
- ├── Unverified / Failed ─► Ephemeral run logged; no memory promoted
- └── Verified (Test passed)
-      │
-      v
-   Self-reflection (tool effectiveness & successful sequence)
-      │
-      v
-   Candidate admission (noise filtering, duplicate deduplication)
-      │
-      v
-   Consolidation (promote / merge into bounded memory)
-      │
-      v
-Next fresh agent session inherits proven playbooks & strategies!
-```
+A custom host calls pre-tool checks, executes allowed actions, records results, and supplies verification evidence at session completion. The host must enforce a blocking result. Installing skills does not wire these hooks into every agent.
 
----
+- `src/runtime/` fingerprints actions, evaluates repetition, and stores run ledgers.
+- `src/codex/hooks.ts` coordinates checks, retrieval, reflection, and metrics.
+- `src/learning/` admits, merges, retrieves, and prunes runtime JSON memories.
+- `src/metrics/` aggregates runtime events.
+- `src/cli/dashboard.ts` serves the runtime dashboard over loopback HTTP.
 
-```mermaid
-flowchart TD
-    subgraph Agent["1. Coding Agent Environment"]
-        A["Agent Session<br/>Claude, Codex, Cursor, Windsurf, OpenCode, Pi"]
-        A_ACTION["Proposed Tool Action<br/>e.g. run_command 'npm test'"]
-        A --> A_ACTION
-    end
+Runtime JSON memories and CLI Markdown playbooks have separate retrieval paths. The dashboard displays runtime data; `burr search` and `burr audit` expose the CLI workflow.
 
-    subgraph LoopGuard["2. Deterministic Loop Guard"]
-        LG{"LoopDetector evaluateAction<br/>Risk Scoring: 0 to 100"}
-        LG_BLOCK["Risk 70 or higher: Hard Block<br/>Halts repetitive cycling and injects redirection advice"]
-        LG_PASS["Risk below 70: Approved<br/>Safe to execute"]
-        
-        A_ACTION --> LG
-        LG -->|High Risk| LG_BLOCK
-        LG_BLOCK -.->|Redirect Strategy| A
-        LG -->|Approved| LG_PASS
-    end
-
-    subgraph Execution["3. Execution and Ledger"]
-        EXEC["Action Execution<br/>Subprocess or Tool Call"]
-        LEDGER["Action Ledger<br/>Records tool args hash and stdout fingerprint"]
-        LG_PASS --> EXEC
-        EXEC --> LEDGER
-    end
-
-    subgraph Verification["4. Proof Verification Gate"]
-        VERIFY{"Verification Passed?<br/>e.g. npm test 100% green"}
-        LEDGER --> VERIFY
-        V_FAIL["Unverified Run<br/>Discarded or held in ephemeral run history"]
-        V_PASS["Verified Fix Proof<br/>Candidate generated with Problem-Cause-Fix-Verify"]
-        VERIFY -->|Unverified| V_FAIL
-        VERIFY -->|Verified Proof| V_PASS
-    end
-
-    subgraph Storage["5. Shared Machine Memory"]
-        ADMIT["admitCandidate<br/>Deduplication and Quality Filter"]
-        STORE["Persistent Memory Store<br/>playbooks, signals, knowledge"]
-        
-        V_PASS --> ADMIT
-        ADMIT --> STORE
-    end
-
-    STORE -.->|Reused on Turn 1| A
-```
-
-```text
-               CODING AGENTS & WORKFLOWS
-    (Claude Code / Codex / Cursor / Windsurf / OpenCode / Pi)
-                              │
-               tools / APIs / MCP / shell
-                              │
-                              v
-              ┌─────────────────────────────┐
-              │            BURR             │
-              │                             │
-              │  Runtime Watcher            │
-              │  Action Ledger (JSONL)      │
-              │  Deterministic Loop Guard   │
-              │  Self-Reflection Engine     │
-              │  Candidate Admission Gate   │
-              │  Memory Consolidator        │
-              │  Top-K Scoped Retrieval     │
-              └──────────────┬──────────────┘
-                             │
-                             v
-                     ~/.burr/ (Local Only)
-              ┌──────────────┴──────────────┐
-              │                             │
-        Active Memories              Ephemeral Runs
-      (knowledge, playbooks,         (bounded TTL,
-       strategies, avoidances)        action ledgers)
-```
-
-Burr runs **100% locally with 0 runtime dependencies**. No cloud databases, no remote telemetry, no external embedding APIs, and no mandatory model keys are required for the core loop guard and retrieval engines.
-
----
-
-## Programmatic Node API
-
-Burr can be imported directly into custom agent frameworks, orchestrators, and testing harnesses:
-
-```typescript
-import {
-  LoopDetector,
-  detectActionLoop,
-  retrieveMemories,
-  reflectOnSession,
-  admitCandidate,
-  consolidateMemories,
-} from "burr-memory";
-
-// Initialize the deterministic loop detector
-const detector = new LoopDetector();
-
-// Evaluate a proposed tool action before execution
-const check = detector.evaluateAction("run_command", { cmd: "npm test" });
-
-if (check.blocked) {
-  console.warn("Action halted by Burr Loop Guard:", check.reasons);
-  console.info("Suggested redirection:", check.suggestedAction);
-}
-```
-
----
-
-## OpenAI Codex Runtime Hooks
-
-Burr hooks directly into OpenAI Codex lifecycle events (`src/codex/hooks.ts`):
-
-- **`PreToolUse`**: Evaluates proposed tool execution against recent action history. Calculates composite loop risk score. If `score >= 70`, blocks execution with structured advice. If `score >= 50`, returns warning advice.
-- **`PostToolUse`**: Hashes output fingerprints, detects output stagnation, records execution duration and status in the session ledger.
-- **`SessionStart`**: Automatically retrieves top-k relevant memories matching the repository, language, and task tokens, injecting high-confidence guidance into the agent prompt.
-- **`SessionEnd`**: If verified, triggers post-task self-reflection, scores tool utility, generates candidate lessons, and consolidates them into shared memory.
-- **`PreCompact` / `PostCompact`**: Safeguards active session state and learned lessons across context compaction boundaries.
-
----
-
-## Deterministic Runtime Loop Detection
-
-Rather than relying on another expensive and hallucination-prone LLM call, Burr uses four deterministic mathematical detectors:
-
-1. **Exact Repetition (+40 risk):** Normalized string matching on tool name and canonicalized arguments (`SHA-256` payload hashing).
-2. **Fuzzy Repetition (+25 risk):** Tokenized Jaccard similarity thresholded at `0.85`. Catches minor typographical variations and repeated queries.
-3. **Cycle Detection (+30 risk):** Subsequence matching for repeating action loops of lengths $k \in [2, 6]$ (e.g. `grep -> test -> grep -> test`).
-4. **Output Stagnation (+20 risk):** Consecutive identical output hashes or error output hashes indicating zero forward progress.
-5. **Repeated Failure Penalty (+10 risk):** Consecutive failing commands.
-
-### Thresholds:
-- **Risk < 50:** Normal recording.
-- **Risk 50–69:** **Warn.** Injects actionable redirection guidance.
-- **Risk >= 70:** **Block.** Execution is blocked, forcing the agent to select a different strategy.
-
----
-
-## Bounded Memory Lifecycle & Anti-Bloat Architecture
-
-Burr does not allow unbounded memory accumulation:
+## Storage and maintenance
 
 ```text
 ~/.burr/
-  runs/              Ephemeral session action ledgers (TTL 3–7 days; automatically pruned)
-  candidates/        Unverified lesson proposals (capacity bounded to 100)
-  memory/
-    knowledge/       Repository facts, module mappings, package conventions
-    tool-strategies/ Proven effective tool combinations
-    avoid/           Anti-patterns and disallowed commands
-    playbooks/       Verified problem-cause-fix-verification records
-  archive/           Stale and demoted memories (capacity bounded)
-  metrics/           Performance and learning progression events
+  memory/playbooks/       CLI Markdown playbooks and exported runtime playbooks
+  memory/signals/         reusable CLI failure signals
+  memory/knowledge/      runtime knowledge, playbook records, repository rules, and avoid lessons
+  memory/tool-strategies/ runtime tool strategies
+  candidates/            runtime candidate lessons
+  archive/               archived runtime memories
+  runs/                  runtime action ledgers
+  metrics/               runtime event ledger
 ```
 
-### Memory Quality & Decay Rules:
-- **Admission Filter:** Ephemeral noise (port conflicts, missing local build artifacts, dev-server timeouts) is discarded immediately.
-- **Deduplication:** Near-duplicate candidate lessons are merged into existing records, boosting observation count rather than bloating storage.
-- **Confidence Scoring:** Memories start at base confidence ($0.70$–$0.85$). Successful reuse boosts confidence by $+0.05$. Failed reuse penalizes confidence by $-0.15$.
-- **Decay & Pruning:** Memories unused for 30 days degrade to `stale` (receiving a retrieval penalty). After 60 days of inactivity, they are moved to `archive/`. Old runs are purged after TTL.
+`burr memory prune` explicitly applies decay and run retention. Defaults are 30 days to stale, 60 days to archive, and seven days for runs. There is no background pruning service or fixed 12 KB total storage guarantee.
 
----
+## Trust boundaries
 
-## Multi-Session Benchmark: Progression Over Time
+Verification comes from the caller; Burr does not run tests on its behalf. Redaction filters known secret patterns before persistence, but callers must not submit source trees, `.env` contents, or customer data. Guarded filesystem helpers enforce containment and reject linked paths for protected operations.
 
-The core evaluation demonstrates how an agent improves over successive unseen tasks using Burr's learning runtime.
+The dashboard binds to loopback, restricts host and origin headers, and escapes stored text before HTML rendering. Burr has no hosted memory service or telemetry endpoint.
 
-### Test Environment
-- **Repository:** `sansynx/burr-memory`
-- **Agent Integration:** Runtime hooks and multi-agent harnesses
-- **Harness:** Automated deterministic multi-session benchmark runner (`test/benchmark.test.ts`)
+## Test evidence
 
-### Benchmark Execution Trace
-
-#### AO Session 1: `ao-sess-task1-monorepo-resolver`
-- **Task:** Fix ESM module resolution failure in `@repo/utils` packages.
-- **Starting Memory:** Empty (Cold Start).
-- **Execution:**
-  1. Agent explores broadly: `find_by_name`, `grep_search` across multiple directories.
-  2. Agent repeats failing `npm test` and broad `grep` commands (turns 4–6).
-  3. **Burr Loop Guard triggers on turn 7:** Cycle and repetition detected (Score: 70). Action blocked with advice: *"Action blocked: repeating cycle detected. Pivot strategy: inspect configuration files or build artifacts directly."*
-  4. Agent redirects: reads `package.json`, discovers missing build step, runs `npm run build`, then runs targeted test `npm test -- test/resolver.test.ts`.
-  5. Verification passes: 4 tests green.
-  6. **Reflection & Promotion:** Burr reflects on session, extracts 2 candidate lessons:
-     - `repository-rule`: *Always execute npm run build before testing TypeScript packages with package exports*
-     - `tool-strategy`: *Prefer targeted test flags over global runs*
-     Candidates pass admission and are promoted to active memory.
-
-#### AO Session 2: `ao-sess-task2-circular-dep`
-- **Task:** Fix module circular dependency in CLI build and run tests.
-- **Starting Memory:** Contains 2 memories from Session 1.
-- **Execution:**
-  1. `handleSessionStart` retrieves the repository build rule and injects it into context.
-  2. Codex skips exploratory searches entirely.
-  3. Targets `src/cli/index.ts` immediately, applies fix, builds with `npm run build`, and verifies with `npm test -- test/cli.test.ts`.
-  4. Tool calls drop by **60%** (from 10 to 4). Zero loops encountered.
-
-#### AO Session 3: `ao-sess-task3-path-containment`
-- **Task:** Ensure safe fs path containment guards against symlink directory escape.
-- **Execution:**
-  1. Retrieves tool strategies and repository build conventions.
-  2. Executes targeted edit in `src/shared/fs.ts`, builds, and runs isolated tests.
-  3. Completed in **3 tool calls**. Verification passes on first attempt. Memory confidence increases.
-
-#### AO Session 4: `ao-sess-task4-doctor-integrity`
-- **Task:** Add doctor CLI check for storage directory health.
-- **Execution:**
-  1. High-confidence mature memory active.
-  2. Executes direct build and targeted doctor test in **2 tool calls**.
-  3. Completed rapidly with 0 failed calls and 0 loops.
-
----
-
-### Quantitative Comparison Table
-
-| Metric | Run 1 (Cold Start) | Run 2 (Learned Rule) | Run 3 (Reused Strategy) | Run 4 (Mature Memory) | Net Improvement |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **Session ID** | `ao-sess-task1` | `ao-sess-task2` | `ao-sess-task3` | `ao-sess-task4` | - |
-| **Total Tool Calls** | **10** | **4** | **3** | **2** | **-80.0%** |
-| **Failed / Wasted Calls** | **3** | **0** | **0** | **0** | **-100%** |
-| **Loops Detected** | **2** | **0** | **0** | **0** | **-100%** |
-| **Memory Hits** | **0** (cold) | **1** | **1** | **1** | **75% Hit Rate** |
-| **Execution Duration** | **194 ms** | **67 ms** | **37 ms** | **18 ms** | **-90.7%** |
-| **Task Verification** | Verified (✓) | Verified (✓) | Verified (✓) | Verified (✓) | **100% Success** |
-
----
-
-## Memory Bounding & Capacity Proof
-
-At the end of the 4-task progression benchmark:
-- **Total active memories stored:** `5` (strictly bounded).
-- **Candidates remaining:** `0` (all unverified or noisy proposals rejected).
-- **Disk footprint:** Less than `12 KB`.
-- **Search latency:** `< 2 ms` (local token overlap & scope filtering).
-
-Memory does not grow linearly with tasks; it grows asymptotically toward repository mastery, then stabilizes.
-
----
-
-## CLI Tooling & Local Dashboard
-
-Burr ships with a comprehensive set of diagnostic and inspection commands:
-
-```bash
-# View aggregated learning and reliability metrics
-burr stats
-
-# Side-by-side run comparison
-burr compare ao-sess-task1-monorepo-resolver ao-sess-task2-circular-dep
-
-# Manage local memory items
-burr memory summary
-burr memory list --type knowledge
-burr memory inspect mem-xxxx
-burr memory prune
-
-# Health checks for storage and Codex hook configuration
-burr doctor
-
-# Launch the local visual dashboard (zero cloud dependencies)
-burr dashboard --port 4747
-```
-
-### Visual Identity
-The dashboard runs at `http://127.0.0.1:4747` using Burr's bespoke aesthetic:
-- **Ink:** `#0F0F0E` (deep workspace background)
-- **Cream:** `#F4EEE7` (high-contrast typographic body)
-- **Ember:** `#FF5A1F` (accent spine and status indicators)
-
----
-
-## Security Model
-
-1. **Strict Secret Redaction:** All tool arguments, outputs, and candidate proposals are scrubbed of API keys, JWTs, OAuth tokens, private keys, environment variables, and user home directories before touching disk.
-2. **Safe Filesystem Containment:** All filesystem operations use `assertInside` with canonical realpath resolution to prevent symlink traversal attacks.
-3. **Zero Network Egress:** Burr never makes outbound HTTP requests, contains zero remote telemetry, and requires no cloud account or API token.
-4. **Non-Destructive Integration:** Burr never overwrites user-owned `AGENTS.md`, `CLAUDE.md`, or custom editor configurations.
-
+`npm run check` runs type checks and regression tests, including host installation, redaction, filesystem safety, runtime hooks, retrieval, and CLI behavior. `npm pack --dry-run` builds and checks the package contents. The four-session benchmark test is a scripted fixture with supplied outputs, not a measured autonomous agent evaluation.

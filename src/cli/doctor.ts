@@ -38,7 +38,9 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export async function runDoctor(options: { home?: string } = {}): Promise<number> {
+export async function runDoctor(
+  options: { home?: string } = {},
+): Promise<number> {
   const home = options.home ?? userHome();
   const dirs = [
     userPlaybooksDir(home),
@@ -72,13 +74,13 @@ export async function runDoctor(options: { home?: string } = {}): Promise<number
   const stale = memories.filter((m) => m.status === "stale").length;
 
   console.log("Burr Doctor\n");
-  console.log(`Global memory       ${globalMemoryOk ? "✓" : "✗"}`);
+  console.log(
+    `Global memory       ${globalMemoryOk ? "directories present" : "missing or invalid directories"}`,
+  );
   console.log("");
-  console.log("Codex");
-  console.log("  installed         ✓");
-  console.log("  hooks             ✓");
-  console.log("  runtime guard     ✓");
-  console.log("  memory            ✓");
+  console.log("Host integration");
+  console.log("  Runtime hook registration is not checked by this command.");
+  console.log("  Verify lifecycle wiring in the integrating application.");
   console.log("");
   console.log("Memory health");
   console.log(`  active            ${active}`);
@@ -86,5 +88,5 @@ export async function runDoctor(options: { home?: string } = {}): Promise<number
   console.log(`  stale             ${stale}`);
   console.log(`  storage           ${formatBytes(totalBytes)}`);
 
-  return 0;
+  return globalMemoryOk ? 0 : 1;
 }

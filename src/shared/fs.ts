@@ -29,7 +29,10 @@ export function assertInside(root: string, target: string): string {
   return resolved;
 }
 
-async function assertNoSymlinkSegments(root: string, target: string): Promise<void> {
+async function assertNoSymlinkSegments(
+  root: string,
+  target: string,
+): Promise<void> {
   const resolvedRoot = resolve(root);
   const rel = relative(resolvedRoot, target);
   let current = resolvedRoot;
@@ -53,7 +56,10 @@ async function guardedPath(root: string, target: string): Promise<string> {
   return dest;
 }
 
-async function assertCanonicalParent(root: string, target: string): Promise<void> {
+async function assertCanonicalParent(
+  root: string,
+  target: string,
+): Promise<void> {
   const canonicalRoot = await realpath(root);
   const canonicalParent = await realpath(dirname(target));
   assertInside(canonicalRoot, resolve(canonicalParent, basename(target)));
@@ -72,7 +78,12 @@ async function assertUnlinkedFile(target: string) {
 
 function isUnstablePathError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
-  return code === "ENOENT" || code === "EPERM" || code === "EACCES" || code === "EBUSY";
+  return (
+    code === "ENOENT" ||
+    code === "EPERM" ||
+    code === "EACCES" ||
+    code === "EBUSY"
+  );
 }
 
 async function lstatAfterOpen(target: string) {
@@ -86,7 +97,10 @@ async function lstatAfterOpen(target: string) {
   }
 }
 
-async function assertOpenedFile(handle: FileHandle, target: string): Promise<void> {
+async function assertOpenedFile(
+  handle: FileHandle,
+  target: string,
+): Promise<void> {
   const opened = await handle.stat();
   const current = await lstatAfterOpen(target);
   if (
@@ -111,7 +125,10 @@ async function prepareInside(root: string, target: string): Promise<string> {
   return dest;
 }
 
-async function refuseUnstablePath(target: string, action: () => Promise<void>): Promise<void> {
+async function refuseUnstablePath(
+  target: string,
+  action: () => Promise<void>,
+): Promise<void> {
   try {
     await action();
   } catch (error) {
@@ -150,7 +167,12 @@ export async function writeIfMissing(
 ): Promise<"created" | "skipped"> {
   const dest = await prepareInside(root, target);
   try {
-    await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, data);
+    await writeSafely(
+      root,
+      dest,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      data,
+    );
     return "created";
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") return "skipped";
@@ -158,19 +180,41 @@ export async function writeIfMissing(
   }
 }
 
-export async function writeInside(root: string, target: string, data: string): Promise<string> {
+export async function writeInside(
+  root: string,
+  target: string,
+  data: string,
+): Promise<string> {
   const dest = await prepareInside(root, target);
-  await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT, data, true);
+  await writeSafely(
+    root,
+    dest,
+    constants.O_WRONLY | constants.O_CREAT,
+    data,
+    true,
+  );
   return dest;
 }
 
-export async function appendInside(root: string, target: string, data: string): Promise<string> {
+export async function appendInside(
+  root: string,
+  target: string,
+  data: string,
+): Promise<string> {
   const dest = await prepareInside(root, target);
-  await writeSafely(root, dest, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, data);
+  await writeSafely(
+    root,
+    dest,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND,
+    data,
+  );
   return dest;
 }
 
-export async function readInside(root: string, target: string): Promise<string> {
+export async function readInside(
+  root: string,
+  target: string,
+): Promise<string> {
   const dest = await guardedPath(root, target);
   await assertCanonicalParent(root, dest);
   const before = await assertUnlinkedFile(dest);
@@ -193,6 +237,22 @@ export async function readInside(root: string, target: string): Promise<string> 
   }
 }
 
+export async function removeInside(
+  root: string,
+  target: string,
+): Promise<void> {
+  const dest = await guardedPath(root, target);
+  await assertCanonicalParent(root, dest);
+  const before = await assertUnlinkedFile(dest);
+  await assertNoSymlinkSegments(root, dest);
+  await assertCanonicalParent(root, dest);
+  const after = await assertUnlinkedFile(dest);
+  if (before.dev !== after.dev || before.ino !== after.ino) {
+    throw new BurrFsError(`Refusing changed path during removal: ${target}`);
+  }
+  await unlink(dest);
+}
+
 export async function withInsideLock<T>(
   root: string,
   target: string,
@@ -204,7 +264,10 @@ export async function withInsideLock<T>(
     try {
       const handle = await open(
         dest,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+        constants.O_WRONLY |
+          constants.O_CREAT |
+          constants.O_EXCL |
+          constants.O_NOFOLLOW,
         0o600,
       );
       try {
@@ -227,7 +290,11 @@ export async function withInsideLock<T>(
         if ((statError as NodeJS.ErrnoException).code === "ENOENT") continue;
         throw statError;
       }
-      if (!existing.isFile() || existing.isSymbolicLink() || existing.nlink > 1) {
+      if (
+        !existing.isFile() ||
+        existing.isSymbolicLink() ||
+        existing.nlink > 1
+      ) {
         throw new BurrFsError(`Refusing lock at non-file path: ${target}`);
       }
       if (Date.now() - existing.mtimeMs > 30_000) {

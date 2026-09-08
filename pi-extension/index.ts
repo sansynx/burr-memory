@@ -45,6 +45,7 @@ const COMMANDS = {
 } as const;
 
 type PiApi = {
+  sendUserMessage: (text: string, options?: { deliverAs: "followUp" }) => void;
   registerCommand?: (
     name: string,
     options: {
@@ -75,8 +76,14 @@ function projectRoot(ctx?: { cwd?: string }): string {
 
 function loadMode(root: string): "on" | "strict" | "off" {
   try {
-    const config = JSON.parse(readFileSync(join(root, ".burr", "config.json"), "utf8"));
-    if (config?.mode === "strict" || config?.mode === "off" || config?.mode === "on") {
+    const config = JSON.parse(
+      readFileSync(join(root, ".burr", "config.json"), "utf8"),
+    );
+    if (
+      config?.mode === "strict" ||
+      config?.mode === "off" ||
+      config?.mode === "on"
+    ) {
       return config.mode;
     }
   } catch {
@@ -87,25 +94,29 @@ function loadMode(root: string): "on" | "strict" | "off" {
 
 let cachedInstructions: string | null = null;
 
-function loadInstructions(root: string, mode?: "on" | "strict" | "off"): string {
+function loadInstructions(
+  root: string,
+  mode?: "on" | "strict" | "off",
+): string {
   if (cachedInstructions === null) {
     const packed = join(PACKAGE_ROOT, "templates", "instructions.md");
     cachedInstructions = readText(packed) || DEFAULT_INSTRUCTIONS;
   }
   const currentMode = mode ?? loadMode(root);
-  return currentMode === "strict" ? `${cachedInstructions}${STRICT_INSTRUCTIONS}` : cachedInstructions;
+  return currentMode === "strict"
+    ? `${cachedInstructions}${STRICT_INSTRUCTIONS}`
+    : cachedInstructions;
 }
 
 export default function burr(pi: PiApi): void {
   for (const [name, command] of Object.entries(COMMANDS)) {
     pi.registerCommand?.(name, {
       description: command.description,
-      handler: async (args, ctx) => {
+      handler: async (args) => {
         const prompt = [command.template, args ? `\nArguments: ${args}` : ""]
           .join("")
           .trim();
-        const send = (ctx as { sendMessage?: (text: string) => Promise<void> }).sendMessage;
-        if (send) await send(prompt);
+        pi.sendUserMessage(prompt, { deliverAs: "followUp" });
       },
     });
   }

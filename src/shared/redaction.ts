@@ -5,7 +5,10 @@ const PATTERNS: Array<[RegExp, string]> = [
     /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
     "[REDACTED]",
   ],
-  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[REDACTED]"],
+  [
+    /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
+    "[REDACTED]",
+  ],
   [
     /\b(?:sk-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,})\b/g,
     "[REDACTED]",
@@ -22,7 +25,10 @@ const PATTERNS: Array<[RegExp, string]> = [
     /\b[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[:=]\s*['"]?[^'"\s]+/g,
     "[REDACTED]",
   ],
-  [/([?&](?:token|key|secret|password|access_token|api_key|auth)=)[^&\s]+/gi, "$1[REDACTED]"],
+  [
+    /([?&](?:token|key|secret|password|access_token|api_key|auth)=)[^&\s]+/gi,
+    "$1[REDACTED]",
+  ],
   [/\/\/([^/@\s]+):([^@/\s]+)@/g, "//$1:[REDACTED]@"],
   [/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]"],
   [/(\/Users\/)[^/\s"'`]+/g, "$1[HOME]"],
@@ -45,4 +51,22 @@ export function redactUnbounded(text: string): string {
 
 export function redact(text: string): string {
   return clip(redactUnbounded(text), TEXT_LIMIT);
+}
+
+export function redactStructured<T>(value: T): T {
+  if (typeof value === "string") return redact(value) as T;
+  if (Array.isArray(value)) return value.map(redactStructured) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        /(?:secret|token|password|passwd|authorization|api[_-]?key|private[_-]?key)/i.test(
+          key,
+        )
+          ? "[REDACTED]"
+          : redactStructured(nested),
+      ]),
+    ) as T;
+  }
+  return value;
 }

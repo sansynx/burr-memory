@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { evaluateCandidateAdmission } from "../../src/learning/admission.js";
 import {
   applyMemoryDecayAndPruning,
@@ -9,13 +11,16 @@ import {
   promoteCandidate,
   recordMemoryReuse,
   saveCandidate,
+  saveMemoryItem,
 } from "../../src/learning/consolidator.js";
 import { reflectOnSession } from "../../src/learning/reflection.js";
 import { recordAction } from "../../src/runtime/action-ledger.js";
 import type { CandidateLesson, MemoryItem } from "../../src/shared/types.js";
 import { withTempDir } from "../helpers.js";
 
-function mockCandidate(overrides: Partial<CandidateLesson> = {}): CandidateLesson {
+function mockCandidate(
+  overrides: Partial<CandidateLesson> = {},
+): CandidateLesson {
   return {
     id: "cand-123",
     type: "repository-rule",
@@ -65,7 +70,8 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
 
     it("merges duplicate candidates into existing memories", () => {
       const candidate = mockCandidate({
-        statement: "Authentication middleware lives under src/server/auth/callback.ts",
+        statement:
+          "Authentication middleware lives under src/server/auth/callback.ts",
       });
       const existing: MemoryItem = {
         id: "mem-auth-1",
@@ -87,6 +93,30 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
   });
 
   describe("promotion and merging", () => {
+    it("rejects candidate ids that escape the candidates directory", async () => {
+      await withTempDir(async (home) => {
+        await expect(
+          saveCandidate(mockCandidate({ id: "../escaped" }), home),
+        ).rejects.toThrow();
+      });
+    });
+    it("redacts persisted candidate evidence and memory statements", async () => {
+      await withTempDir(async (home) => {
+        const secret = ["synthetic", "learning", "credential"].join("-");
+        const candidate = mockCandidate({
+          statement: `Configure token=${secret} before testing`,
+        });
+        candidate.evidence.verificationCommand = `run password=${secret}`;
+        await saveCandidate(candidate, home);
+        expect(JSON.stringify(await listCandidates(home))).not.toContain(
+          secret,
+        );
+        await promoteCandidate(candidate, home);
+        expect(JSON.stringify(await listAllMemories(home))).not.toContain(
+          secret,
+        );
+      });
+    });
     it("promotes candidate to active memory and deletes candidate", async () => {
       await withTempDir(async (home) => {
         const candidate = mockCandidate({ id: "cand-promo" });
@@ -110,11 +140,17 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
 
     it("merges candidate into existing memory, increasing observed count and confidence", async () => {
       await withTempDir(async (home) => {
-        const candidate1 = mockCandidate({ id: "cand-base", statement: "Run targeted unit tests first." });
+        const candidate1 = mockCandidate({
+          id: "cand-base",
+          statement: "Run targeted unit tests first.",
+        });
         const mem = await promoteCandidate(candidate1, home);
         const initialConf = mem.confidence;
 
-        const candidate2 = mockCandidate({ id: "cand-next", statement: "Targeted tests run faster." });
+        const candidate2 = mockCandidate({
+          id: "cand-next",
+          statement: "Targeted tests run faster.",
+        });
         const merged = await mergeCandidate(candidate2, mem.id, home);
 
         expect(merged.id).toBe(mem.id);
@@ -145,6 +181,40 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
   });
 
   describe("decay and pruning", () => {
+    it("archives a memory that was previously made stale", async () => {
+      await withTempDir(async (home) => {
+        const item = await promoteCandidate(
+          mockCandidate({ id: "cand-stale" }),
+          home,
+        );
+        item.status = "stale";
+        item.evidence.lastUsed = new Date(
+          Date.now() - 70 * 86400000,
+        ).toISOString();
+        await saveMemoryItem(item, home);
+        expect((await applyMemoryDecayAndPruning(home)).archived).toBe(1);
+        expect((await getMemory(item.id, home))?.status).toBe("archived");
+      });
+    });
+
+    it("does not delete a path supplied in a stored memory id", async () => {
+      await withTempDir(async (home) => {
+        const item = await promoteCandidate(
+          mockCandidate({ id: "cand-traversal" }),
+          home,
+        );
+        const victim = join(home, "keep.json");
+        await writeFile(victim, "keep");
+        item.id = "../../../keep";
+        item.evidence.lastUsed = new Date(0).toISOString();
+        await writeFile(
+          join(home, ".burr", "memory", "knowledge", "mem-traversal.json"),
+          JSON.stringify(item),
+        );
+        await applyMemoryDecayAndPruning(home).catch(() => undefined);
+        expect(await readFile(victim, "utf8")).toBe("keep");
+      });
+    });
     it("transitions stale memories and cleans up archive", async () => {
       await withTempDir(async (home) => {
         const candidate = mockCandidate({ id: "cand-decay" });
@@ -210,9 +280,13 @@ describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
         expect(result.usefulTools).toContain("read");
         expect(result.candidates.length).toBeGreaterThan(0);
 
-        const repoCandidate = result.candidates.find((c) => c.type === "repository-rule");
+        const repoCandidate = result.candidates.find(
+          (c) => c.type === "repository-rule",
+        );
         expect(repoCandidate).toBeDefined();
-        expect(repoCandidate!.statement).toContain("src/server/auth/callback.ts");
+        expect(repoCandidate!.statement).toContain(
+          "src/server/auth/callback.ts",
+        );
       });
     });
   });

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { ensureUserMemory } from "../../src/shared/user-memory.js";
 import { runCompare } from "../../src/cli/compare.js";
 import { runDoctor } from "../../src/cli/doctor.js";
 import { runMemoryCmd } from "../../src/cli/memory-cmd.js";
@@ -72,8 +73,23 @@ describe("CLI Extended Commands", () => {
 
   it("burr doctor reports health and returns 0", async () => {
     await withTempDir(async (home) => {
+      await ensureUserMemory(home);
       const code = await runDoctor({ home });
       expect(code).toBe(0);
+    });
+  });
+
+  it("doctor reports missing storage without claiming hooks are installed", async () => {
+    await withTempDir(async (home) => {
+      const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        expect(await runDoctor({ home })).toBe(1);
+        const output = logs.mock.calls.flat().join("\n");
+        expect(output).not.toMatch(/installed\s+✓|hooks\s+✓/);
+        expect(output).toMatch(/not checked|not verified/i);
+      } finally {
+        logs.mockRestore();
+      }
     });
   });
 });

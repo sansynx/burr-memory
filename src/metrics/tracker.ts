@@ -1,9 +1,18 @@
 import { listCandidates, listAllMemories } from "../learning/consolidator.js";
 import { listRuns, loadRun } from "../runtime/action-ledger.js";
-import { assertInside, appendInside, readInside, writeInside } from "../shared/fs.js";
+import {
+  assertInside,
+  appendInside,
+  readInside,
+  writeInside,
+} from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
+import { redactStructured } from "../shared/redaction.js";
 import type { BurrStats, MetricsEvent } from "../shared/types.js";
-import { ensureUserMemory, userMetricsEventsPath } from "../shared/user-memory.js";
+import {
+  ensureUserMemory,
+  userMetricsEventsPath,
+} from "../shared/user-memory.js";
 
 export async function recordMetricsEvent(
   event: Omit<MetricsEvent, "ts"> & { ts?: string },
@@ -13,7 +22,7 @@ export async function recordMetricsEvent(
   await ensureUserMemory(resolvedHome);
 
   const fullEvent: MetricsEvent = {
-    ...event,
+    ...redactStructured(event),
     ts: event.ts ?? new Date().toISOString(),
   };
 
@@ -161,7 +170,8 @@ export async function computeBurrStats(home?: string): Promise<BurrStats> {
   }
 
   const totalSearches = hits + misses;
-  const hitRate = totalSearches > 0 ? Math.round((hits / totalSearches) * 100) : 0;
+  const hitRate =
+    totalSearches > 0 ? Math.round((hits / totalSearches) * 100) : 0;
 
   return {
     memory: {
@@ -202,10 +212,14 @@ export interface LearningProgressionStep {
   verified: boolean;
 }
 
-export async function computeLearningProgression(home?: string): Promise<LearningProgressionStep[]> {
+export async function computeLearningProgression(
+  home?: string,
+): Promise<LearningProgressionStep[]> {
   const resolvedHome = home ?? userHome();
   const runIds = await listRuns(resolvedHome);
-  const summaries = await Promise.all(runIds.map((id) => loadRun(resolvedHome, id)));
+  const summaries = await Promise.all(
+    runIds.map((id) => loadRun(resolvedHome, id)),
+  );
   const steps: LearningProgressionStep[] = [];
 
   for (let i = 0; i < summaries.length; i += 1) {

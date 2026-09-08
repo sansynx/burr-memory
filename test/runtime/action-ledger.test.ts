@@ -1,7 +1,16 @@
-import { utimes } from "node:fs/promises";
+import {
+  readFile,
+  utimes,
+  mkdir,
+  symlink,
+  writeFile,
+  rename,
+} from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   cleanOldRuns,
+  clearSessionCache,
   getSessionActions,
   listRuns,
   loadRun,
@@ -11,6 +20,128 @@ import {
 import { withTempDir } from "../helpers.js";
 
 describe("Action Ledger", () => {
+  it("assigns unique sequences in persisted order for concurrent actions", async () => {
+    await withTempDir(async (home) => {
+      const action = {
+        sessionId: "concurrent-run",
+        harness: "codex",
+        tool: "exec",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed" as const,
+      };
+      await recordAction(home, action);
+      await Promise.all(
+        Array.from({ length: 10 }, () => recordAction(home, action)),
+      );
+      const summary = await loadRun(home, action.sessionId);
+      expect(summary?.actions.map((entry) => entry.sequence)).toEqual(
+        Array.from({ length: 11 }, (_, index) => index + 1),
+      );
+    });
+  });
+  it("summarizes all actions beyond the runtime cache window", async () => {
+    await withTempDir(async (home) => {
+      const first = await recordAction(home, {
+        sessionId: "long-run",
+        harness: "codex",
+        tool: "exec",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "failed",
+        timestamp: "2026-01-01T00:00:00Z",
+      });
+      const rows = Array.from({ length: 500 }, (_, index) => ({
+        ...first,
+        sequence: index + 1,
+      }));
+      await writeFile(
+        runFilePath(home, "long-run"),
+        rows.map((row) => JSON.stringify(row)).join("\n") + "\n",
+      );
+      clearSessionCache();
+      await recordAction(home, {
+        ...first,
+        sequence: 501,
+        status: "completed",
+        timestamp: "2026-01-01T00:01:00Z",
+      });
+      const summary = await loadRun(home, "long-run");
+      expect(summary?.toolCalls).toBe(501);
+      expect(summary?.failedCalls).toBe(500);
+      expect(summary?.durationMs).toBe(60000);
+    });
+  });
+
+  it("does not cache an action when its write fails", async () => {
+    await withTempDir(async (home) => {
+      const action = {
+        sessionId: "failed-write",
+        harness: "codex",
+        tool: "exec",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed" as const,
+      };
+      await recordAction(home, action);
+      const path = runFilePath(home, action.sessionId);
+      await rename(path, `${path}.backup`);
+      await mkdir(path);
+      await expect(recordAction(home, action)).rejects.toThrow();
+      expect(await getSessionActions(home, action.sessionId)).toHaveLength(1);
+    });
+  });
+  it("isolates identical session ids in different homes", async () => {
+    await withTempDir(async (home) => {
+      await withTempDir(async (otherHome) => {
+        await recordAction(home, {
+          sessionId: "shared-id",
+          harness: "codex",
+          tool: "search",
+          normalizedArgs: {},
+          inputFingerprint: "fp",
+          status: "completed",
+        });
+        expect(await getSessionActions(otherHome, "shared-id")).toEqual([]);
+      });
+    });
+  });
+  it("redacts nested arguments and errors before caching and persistence", async () => {
+    await withTempDir(async (home) => {
+      const secret = ["synthetic", "credential", "value"].join("-");
+      const action = await recordAction(home, {
+        sessionId: "private-args",
+        harness: "codex",
+        tool: "exec",
+        normalizedArgs: {
+          token: secret,
+          nested: [{ password: secret }],
+          cmd: `token=${secret}`,
+        },
+        error: `password=${secret}`,
+        inputFingerprint: "fp",
+        status: "failed",
+      });
+      expect(JSON.stringify(action)).not.toContain(secret);
+      expect(
+        await readFile(runFilePath(home, "private-args"), "utf8"),
+      ).not.toContain(secret);
+    });
+  });
+
+  it("does not prune through a symlinked runs directory", async () => {
+    await withTempDir(async (home) => {
+      await withTempDir(async (outside) => {
+        await mkdir(join(home, ".burr", "memory"), { recursive: true });
+        await symlink(outside, join(home, ".burr", "runs"), "junction");
+        const victim = join(outside, "old.jsonl");
+        await writeFile(victim, "keep");
+        await utimes(victim, 0, 0);
+        await cleanOldRuns(home);
+        expect(await readFile(victim, "utf8")).toBe("keep");
+      });
+    });
+  });
   it("records actions, auto-increments sequence, and computes fingerprints", async () => {
     await withTempDir(async (home) => {
       const a1 = await recordAction(home, {

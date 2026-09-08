@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readdir, mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   handlePostToolUse,
   handlePreCompact,
@@ -6,11 +8,95 @@ import {
   handleSessionEnd,
   handleSessionStart,
 } from "../../src/codex/hooks.js";
-import { listAllMemories, promoteCandidate } from "../../src/learning/consolidator.js";
+import {
+  listAllMemories,
+  promoteCandidate,
+} from "../../src/learning/consolidator.js";
 import { getSessionActions } from "../../src/runtime/action-ledger.js";
+import {
+  loadAllEvents,
+  recordMetricsEvent,
+} from "../../src/metrics/tracker.js";
 import { withTempDir } from "../helpers.js";
 
 describe("OpenAI Codex Runtime Hooks", () => {
+  it("uses the session-start input root to load disabled mode", async () => {
+    await withTempDir(async (root) => {
+      await withTempDir(async (home) => {
+        await mkdir(join(root, ".burr"));
+        await writeFile(
+          join(root, ".burr", "config.json"),
+          JSON.stringify({ mode: "off" }),
+        );
+        await handleSessionStart({ sessionId: "input-root", root }, { home });
+        expect(await readdir(home)).toEqual([]);
+      });
+    });
+  });
+  it("redacts structured metric data before persistence", async () => {
+    await withTempDir(async (home) => {
+      const secret = ["synthetic", "metric", "credential"].join("-");
+      await recordMetricsEvent(
+        {
+          type: "session_start",
+          data: { token: secret, command: `password=${secret}` },
+        },
+        home,
+      );
+      expect(JSON.stringify(await loadAllEvents(home))).not.toContain(secret);
+    });
+  });
+
+  it("does not record tool actions when the runtime is disabled", async () => {
+    await withTempDir(async (root) => {
+      await withTempDir(async (home) => {
+        await mkdir(join(root, ".burr"));
+        await writeFile(
+          join(root, ".burr", "config.json"),
+          JSON.stringify({ runtime: { enabled: false } }),
+        );
+        await handlePostToolUse(
+          {
+            sessionId: "runtime-disabled",
+            tool: "exec",
+            args: {},
+            output: "done",
+          },
+          { home, root },
+        );
+        expect(await readdir(home)).toEqual([]);
+      });
+    });
+  });
+  it("does not write runtime or learned state when mode is off", async () => {
+    await withTempDir(async (root) => {
+      await withTempDir(async (home) => {
+        await mkdir(join(root, ".burr"));
+        await writeFile(
+          join(root, ".burr", "config.json"),
+          JSON.stringify({ mode: "off" }),
+        );
+        const sessionId = "disabled-session";
+        await handleSessionStart({ sessionId }, { home, root });
+        await handlePostToolUse(
+          { sessionId, tool: "exec", args: {}, output: "done" },
+          { home, root },
+        );
+        const result = await handleSessionEnd(
+          {
+            sessionId,
+            verified: true,
+            error: "failure",
+            rootCause: "cause",
+            fix: "correct configuration",
+          },
+          { home, root },
+        );
+        expect(result.candidatesGenerated).toBe(0);
+        expect(await readdir(home)).toEqual([]);
+      });
+    });
+  });
   it("PreToolUse allows safe action, warns on repeated risk, and blocks on high-confidence cycle", async () => {
     await withTempDir(async (home) => {
       const sessionId = "codex-test-session";
@@ -24,7 +110,12 @@ describe("OpenAI Codex Runtime Hooks", () => {
       expect(r1.block).toBeFalsy();
 
       await handlePostToolUse(
-        { sessionId, tool: "search", args: { query: "prisma client bug" }, output: "0 results" },
+        {
+          sessionId,
+          tool: "search",
+          args: { query: "prisma client bug" },
+          output: "0 results",
+        },
         { home },
       );
 
@@ -36,21 +127,41 @@ describe("OpenAI Codex Runtime Hooks", () => {
       expect(r2.allow).toBe(true);
 
       await handlePostToolUse(
-        { sessionId, tool: "search", args: { query: "prisma client bug" }, output: "0 results" },
+        {
+          sessionId,
+          tool: "search",
+          args: { query: "prisma client bug" },
+          output: "0 results",
+        },
         { home },
       );
 
       // 3. Repeat a sequence to form a cycle (search -> read -> search -> read -> search)
       await handlePostToolUse(
-        { sessionId, tool: "read", args: { file: "schema.prisma" }, output: "model User" },
+        {
+          sessionId,
+          tool: "read",
+          args: { file: "schema.prisma" },
+          output: "model User",
+        },
         { home },
       );
       await handlePostToolUse(
-        { sessionId, tool: "search", args: { query: "prisma client bug" }, output: "0 results" },
+        {
+          sessionId,
+          tool: "search",
+          args: { query: "prisma client bug" },
+          output: "0 results",
+        },
         { home },
       );
       await handlePostToolUse(
-        { sessionId, tool: "read", args: { file: "schema.prisma" }, output: "model User" },
+        {
+          sessionId,
+          tool: "read",
+          args: { file: "schema.prisma" },
+          output: "model User",
+        },
         { home },
       );
 
@@ -109,15 +220,30 @@ describe("OpenAI Codex Runtime Hooks", () => {
       const sessionId = "codex-session-end";
 
       await handlePostToolUse(
-        { sessionId, tool: "search", args: { q: "auth error" }, output: "found auth.ts" },
+        {
+          sessionId,
+          tool: "search",
+          args: { q: "auth error" },
+          output: "found auth.ts",
+        },
         { home },
       );
       await handlePostToolUse(
-        { sessionId, tool: "edit", args: { path: "src/server/auth.ts" }, output: "saved" },
+        {
+          sessionId,
+          tool: "edit",
+          args: { path: "src/server/auth.ts" },
+          output: "saved",
+        },
         { home },
       );
       await handlePostToolUse(
-        { sessionId, tool: "bash", args: { cmd: "npm test" }, output: "1 passed" },
+        {
+          sessionId,
+          tool: "bash",
+          args: { cmd: "npm test" },
+          output: "1 passed",
+        },
         { home },
       );
 

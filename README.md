@@ -56,204 +56,51 @@ If you resolve a Prisma singleton bug in `shop`, the next agent in `billing` (or
 
 ## What is Burr?
 
-Burr is a **local learning and reliability runtime for coding agents**. 
+Burr is local debugging memory for coding agents. Search for a known fix, capture a reusable failure, and save a playbook after verifying the solution. Playbooks stay on your machine and can be reused across projects.
 
-It observes how an agent interacts with tools, detects when an agent gets stuck in repetitive execution loops, learns from successful and unsuccessful tool usage, compresses verified solutions into bounded local memory, and injects that memory into future sessions so fresh agents become measurably faster and more reliable over time.
+The package also provides runtime APIs for recording tool actions, detecting repetition, and learning from verified sessions. A host must call these APIs and honor their results. Installing the skills alone does not automatically intercept every tool call.
 
----
-
-## Why Agents Loop
-
-Autonomous agents frequently fall into repetitive trap loops:
-- **Exact repetition:** Running identical failing test commands or repeating queries without altering inputs.
-- **Fuzzy repetition:** Re-running searches or shell commands with trivial whitespace or semantic alterations that produce the exact same error.
-- **Cyclic exploration:** Falling into repeating cycles of tool calls (e.g. `grep -> find -> test -> grep -> find -> test`).
-- **Output stagnation:** Repeatedly getting identical stack traces or empty search results while continuing down dead-end hypotheses.
-
-Because language models generate tokens step-by-step from context, they struggle to step outside their own generation trajectory to recognize when they have stagnated. Burr acts as an external deterministic runtime watcher that intercepts these patterns before tokens and time are wasted.
-
----
-
-## Why Agents Forget
-
-Agent context is inherently fleeting:
-- When a context window fills up, compaction drops the precise commands, build steps, and environment lessons that led to the solution.
-- When a fresh task starts in the same repository, a new agent session begins with zero recall of repository conventions, required build sequences, or tricky dependency quirks.
-
-Burr bridges this gap by persisting verified lessons into structured machine-local memory that survives session resets and context compaction.
-
----
-
-## High-Level Architecture
+## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Agent["1. Coding Agent Environment"]
-        A["Agent Session<br/>Claude, Codex, Cursor, Windsurf, OpenCode, Pi"]
-        A_ACTION["Proposed Tool Action<br/>e.g. run_command 'npm test'"]
-        A --> A_ACTION
-    end
-
-    subgraph LoopGuard["2. Deterministic Loop Guard"]
-        LG{"LoopDetector evaluateAction<br/>Risk Scoring: 0 to 100"}
-        LG_BLOCK["Risk 70 or higher: Hard Block<br/>Halts repetitive cycling and injects redirection advice"]
-        LG_PASS["Risk below 70: Approved<br/>Safe to execute"]
-        
-        A_ACTION --> LG
-        LG -->|High Risk| LG_BLOCK
-        LG_BLOCK -.->|Redirect Strategy| A
-        LG -->|Approved| LG_PASS
-    end
-
-    subgraph Execution["3. Execution and Ledger"]
-        EXEC["Action Execution<br/>Subprocess or Tool Call"]
-        LEDGER["Action Ledger<br/>Records tool args hash and stdout fingerprint"]
-        LG_PASS --> EXEC
-        EXEC --> LEDGER
-    end
-
-    subgraph Verification["4. Proof Verification Gate"]
-        VERIFY{"Verification Passed?<br/>e.g. npm test 100% green"}
-        LEDGER --> VERIFY
-        V_FAIL["Unverified Run<br/>Discarded or held in ephemeral run history"]
-        V_PASS["Verified Fix Proof<br/>Candidate generated with Problem-Cause-Fix-Verify"]
-        VERIFY -->|Unverified| V_FAIL
-        VERIFY -->|Verified Proof| V_PASS
-    end
-
-    subgraph Storage["5. Shared Machine Memory"]
-        ADMIT["admitCandidate<br/>Deduplication and Quality Filter"]
-        STORE["Persistent Memory Store<br/>playbooks, signals, knowledge"]
-        
-        V_PASS --> ADMIT
-        ADMIT --> STORE
-    end
-
-    STORE -.->|Reused on Turn 1| A
+flowchart LR
+    Agent["Coding agent"] --> Burr["Burr skills and CLI"]
+    Burr --> Project["Project .burr/<br/>config and usage"]
+    Burr <-->|"search and save fixes"| Memory["Shared local memory<br/>~/.burr/memory/"]
+    Agent -.->|"optional integration"| Runtime["Runtime hooks<br/>loop checks and action ledger"]
+    Runtime -->|"verified lessons"| Memory
 ```
 
-```text
-               CODING AGENTS & WORKFLOWS
-    (Claude Code / Codex / Cursor / Windsurf / Pi / OpenCode)
-                              │
-               tools / APIs / MCP / shell
-                              │
-                              v
-                ┌─────────────────────────────┐
-                │            BURR             │
-                │                             │
-                │  Runtime Watcher            │
-                │  Action Ledger (JSONL)      │
-                │  Deterministic Loop Guard   │
-                │  Self-Reflection Engine     │
-                │  Candidate Admission Gate   │
-                │  Memory Consolidator        │
-                │  Top-K Scoped Retrieval     │
-                └──────────────┬──────────────┘
-                               │
-                               v
-                       ~/.burr/ (Local Only)
-                ┌──────────────┴──────────────┐
-                │                             │
-          Active Memories              Ephemeral Runs
-        (knowledge, playbooks,         (bounded TTL,
-         strategies, avoidances)        action ledgers)
-```
+Skills and CLI commands handle the debugging workflow. Runtime hooks add tool observation when an integration calls them. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
 
----
+## Learning and retention
 
-## How Burr Learns
-
-```text
-TASK
- │
- v
-Codex starts working (AO Session)
- │
- v
-Search Burr local memory (top-k scoped match)
- │
- v
-Perform tool calls
- │
- v
-Burr runtime ledger records action & evaluates loop risk
- │
- ├── Loop risk >= 50? ──► Emit warning & suggest redirection
- └── Loop risk >= 70? ──► Block action & force alternate path
- │
- v
-Task completed & verified?
- │
- ├── Unverified / Failed ─► Ephemeral run logged; no memory promoted
- └── Verified (Test passed)
-      │
-      v
-   Self-reflection (tool effectiveness & successful sequence)
-      │
-      v
-   Candidate admission (noise filtering, duplicate deduplication)
-      │
-      v
-   Consolidation (promote / merge into bounded memory)
-      │
-      v
-Next fresh Codex session inherits proven playbooks & strategies!
-```
-
----
-
-## What Burr Decides NOT to Remember (Anti-Bloat & Decay)
-
-Unrestricted agent memory quickly degrades. Burr enforces strict admission and decay criteria:
-
-1. **Ephemeral Noise Rejection:** Temporary environment quirks (port in use, down dev server, missing local unbuilt build artifact) are discarded immediately and never promoted.
-2. **Mandatory Verification Gate:** A candidate lesson is never promoted to long-term memory unless the fix was explicitly verified with a passing test, compiler run, or reproduction check.
-3. **Deduplication & Merging:** If a newly learned strategy matches an existing memory, Burr merges them: updating the observation count and confidence score rather than adding duplicate entries.
-4. **Autonomous Memory Decay & Pruning:**
-   - Active memories unused for 30 days degrade to `stale` with retrieval score penalties.
-   - After 60 days of inactivity, stale memories are archived.
-   - Ephemeral session ledgers (`runs/`) are pruned automatically after a 3 to 7 day TTL.
-
----
+- `capture` admits reusable failures and rejects common temporary environment noise.
+- `resolve` requires error, cause, fix, and verification text. The caller must run the check and report its result truthfully; Burr does not execute verification commands itself.
+- Runtime session completion accepts verification evidence from the integrating host. Admission filters candidate lessons before promotion or merging.
+- `burr memory prune` applies decay and removes expired run history. This is an explicit maintenance command, not a background scheduler. The parsed `runRetentionDays`, `archiveAfterDays`, and `maxCandidates` configuration fields are reserved; current CLI pruning uses the defaults below. Defaults mark memories stale after 30 days and archive them after 60 days; run history is retained for seven days.
+- Runtime JSON memories and CLI Markdown playbooks use separate retrieval paths. The runtime dashboard reports runtime records, while `burr search` and `burr audit` cover the CLI workflow.
 
 ## Programmatic Node API
 
-Burr exports clean runtime classes and functions for direct integration into agent loops, harnesses, or test harnesses:
+Use the `/api` export for the Node API. The package root exports the OpenCode plugin.
 
 ```typescript
-import {
-  LoopDetector,
-  detectActionLoop,
-  retrieveMemories,
-  reflectOnSession,
-  admitCandidate,
-  consolidateMemories,
-} from "burr-memory";
+import { LoopDetector } from "burr-memory/api";
 
-// Initialize the deterministic loop detector
-const detector = new LoopDetector();
-
-// Evaluate a proposed tool action before execution
-const check = detector.evaluateAction("run_command", { cmd: "npm test" });
+const detector = new LoopDetector({ autoRecord: false });
+const args = { cmd: "npm test" };
+const check = detector.evaluateAction("run_command", args);
 
 if (check.blocked) {
-  console.warn("Action halted by Burr Loop Guard:", check.reasons);
-  console.info("Suggested redirection:", check.suggestedAction);
+  console.warn(check.reasons, check.suggestedAction);
+} else {
+  // Run the tool, then record its actual result.
+  detector.recordAction("run_command", args, "test output", "completed");
 }
 ```
 
----
-
-## OpenAI Codex Runtime Hooks
-
-Burr provides native integration with OpenAI Codex lifecycle events (`src/codex/hooks.ts`):
-
-- **`PreToolUse`**: Checks proposed tool actions against recent session history. Flags loops with transparent risk scoring (+40 exact, +25 fuzzy, +30 cycles, +20 stagnation). Blocks actions when risk $\ge 70$.
-- **`PostToolUse`**: Computes cryptographic hashes of tool outputs, tracks stagnation, and updates the action ledger.
-- **`SessionStart`**: Retrieves top-k scoped memories (matching repository, language, and query tokens) and injects active guidance into the session context.
-- **`SessionEnd`**: Evaluates task verification, runs self-reflection, scores tool utility, and consolidates new lessons into active memory.
-- **`PreCompact` / `PostCompact`**: Preserves active context and learned insights across context compaction events.
+`burr-memory/codex` exports `handleSessionStart`, `handlePreToolUse`, `handlePostToolUse`, `handleSessionEnd`, and compaction helpers. Custom integrations call these functions with a consistent session ID, project root, and verification evidence. Pi extension commands dispatch through the host messaging API. `burr init` installs Codex skills; it does not register these lifecycle functions with Codex automatically.
 
 ---
 
@@ -280,15 +127,15 @@ npm run build
 
 ## Commands
 
-| Claude / OpenCode | Codex | Pi | What it does |
-|---|---|---|---|
-| `/burr [on\|strict\|off]` | `@burr` | `/skill:burr` | Status, or set mode |
-| `/burr-search` | `@burr-search` | `/skill:burr-search` | Search shared memory on this machine |
-| `/burr-capture` | `@burr-capture` | `/skill:burr-capture` | Save a reusable failure |
-| `/burr-resolve` | `@burr-resolve` | `/skill:burr-resolve` | Write a playbook after a verified fix |
-| `/burr-promote` | `@burr-promote` | `/skill:burr-promote` | Lift an old project-only playbook into shared memory |
-| `/burr-audit` | `@burr-audit` | `/skill:burr-audit` | Usage from `usage.jsonl` |
-| `/burr-help` | `@burr-help` | `/skill:burr-help` | This screen |
+| Claude / OpenCode         | Codex           | Pi                    | What it does                                         |
+| ------------------------- | --------------- | --------------------- | ---------------------------------------------------- |
+| `/burr [on\|strict\|off]` | `@burr`         | `/skill:burr`         | Status, or set mode                                  |
+| `/burr-search`            | `@burr-search`  | `/skill:burr-search`  | Search shared memory on this machine                 |
+| `/burr-capture`           | `@burr-capture` | `/skill:burr-capture` | Save a reusable failure                              |
+| `/burr-resolve`           | `@burr-resolve` | `/skill:burr-resolve` | Write a playbook after a verified fix                |
+| `/burr-promote`           | `@burr-promote` | `/skill:burr-promote` | Lift an old project-only playbook into shared memory |
+| `/burr-audit`             | `@burr-audit`   | `/skill:burr-audit`   | Usage from `usage.jsonl`                             |
+| `/burr-help`              | `@burr-help`    | `/skill:burr-help`    | This screen                                          |
 
 Cursor and Windsurf get the always-on rule only (no slash commands).
 
@@ -308,7 +155,7 @@ burr on | strict | off
 burr stats
 burr compare <run-id-1> <run-id-2>
 burr memory summary
-burr memory list --type knowledge
+burr memory list
 burr memory inspect <memory-id>
 burr memory prune
 burr doctor
@@ -321,46 +168,25 @@ burr dashboard --port 4747
 
 ## Hosts
 
-| Host | Always-on | Commands | `init` writes |
-|---|---|---|---|
-| Claude Code | skill descriptions | `/burr*` via `.claude/skills` | those skill copies |
-| Codex | `@` `.burr/instructions.md` | `@burr*` via plugin / visible skills | `.agents/skills` |
-| OpenCode | plugin injects the rule | `/burr*` via plugin | `.opencode/plugins/burr.mjs` + json merge |
-| Pi | skill descriptions | `/skill:burr*` | `.pi/skills` and `.agents/skills` |
-| Cursor | `.cursor/rules/burr.mdc` | none | that rule file |
-| Windsurf | `.windsurf/rules/burr.md` | none | that rule file |
+| Host        | Always-on                   | Commands                             | `init` writes                             |
+| ----------- | --------------------------- | ------------------------------------ | ----------------------------------------- |
+| Claude Code | skill descriptions          | `/burr*` via `.claude/skills`        | those skill copies                        |
+| Codex       | `@` `.burr/instructions.md` | `@burr*` via plugin / visible skills | `.agents/skills`                          |
+| OpenCode    | plugin injects the rule     | `/burr*` via plugin                  | `.opencode/plugins/burr.mjs` + json merge |
+| Pi          | skill descriptions          | `/skill:burr*`                       | `.pi/skills` and `.agents/skills`         |
+| Cursor      | `.cursor/rules/burr.mdc`    | none                                 | that rule file                            |
+| Windsurf    | `.windsurf/rules/burr.md`   | none                                 | that rule file                            |
 
 Canonical skills live once in `skills/`. `init` creates the host-specific
 copies and adapters each tool expects.
 
 ---
 
-## Multi-Session Benchmark: Progression Over Time
+## Validation and dashboard
 
-Evaluated across four sequential coding agent tasks on an unindexed GitHub repository codebase:
+`test/benchmark.test.ts` exercises a scripted four-session fixture. It checks retrieval, loop handling, and memory reuse with supplied tool outputs. It is a regression test, not an independent agent benchmark or a guarantee of time or token savings.
 
-```text
-RUN       TASK                               CALLS      WASTED      LOOPS      MEMORY HITS      TIME
-1         Monorepo ESM Resolver                 10           3          2                0     194ms
-2         Circular Dependency Fix                4           0          0                1      67ms
-3         Path Containment Safe FS               3           0          0                1      37ms
-4         Storage Integrity Doctor               2           0          0                1      18ms
-```
-
-### Measured Progression:
-- **80% drop in tool calls** by Run 4 as learned repository rules and tool strategies were reused.
-- **100% elimination of wasted calls and loops** after Run 1.
-- **75% memory hit rate** (Run 1 was cold start; Runs 2 to 4 retrieved relevant active rules).
-- **Strictly bounded memory:** Stored active memories remained fixed at 5 items (<12 KB storage).
-
----
-
-## Visual Identity & Local Dashboard
-
-Burr includes an offline, zero-dependency visual dashboard at `http://127.0.0.1:4747` (`burr dashboard`):
-- **Ink:** `#0F0F0E` (deep workspace background)
-- **Cream:** `#F4EEE7` (high-contrast typographic body)
-- **Ember:** `#FF5A1F` (accent spine and status indicators)
+`burr dashboard --port 4747` serves runtime metrics, memories, and run summaries at `http://127.0.0.1:4747`. It binds to loopback and rejects foreign origins and host headers.
 
 ---
 
@@ -410,7 +236,7 @@ test/edges/       bounds, secrets, path escape
 
 Bug reports and pull requests are welcome.
 
-Burr is a local learning and reliability runtime. Please do not add a remote hosted API, cloud dashboard, account system, or background telemetry process. `init` and `global` may only create Burr’s own files; they must never modify a user’s `AGENTS.md`, `CLAUDE.md`, or other existing instruction files.
+Burr is local debugging memory with optional runtime integration. Please do not add a remote hosted API, cloud dashboard, account system, or background telemetry process. `init` and `global` may only create Burr’s own files; they must never modify a user’s `AGENTS.md`, `CLAUDE.md`, or other existing instruction files.
 
 The mark is locked: ink `#0F0F0E`, cream `#F4EEE7`, and ember `#FF5A1F` on the spine at about 2 o’clock. No wordmark or letters.
 
