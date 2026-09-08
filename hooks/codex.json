@@ -1,0 +1,53 @@
+{
+  "description": "Burr local memory and loop checks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --input-type=module -e \"import {pathToFileURL} from 'node:url'; import {join} from 'node:path'; await import(pathToFileURL(join(process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT, 'dist/codex/command.js')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Burr local memory"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --input-type=module -e \"import {pathToFileURL} from 'node:url'; import {join} from 'node:path'; await import(pathToFileURL(join(process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT, 'dist/codex/command.js')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Burr local memory"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --input-type=module -e \"import {pathToFileURL} from 'node:url'; import {join} from 'node:path'; await import(pathToFileURL(join(process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT, 'dist/codex/command.js')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Burr local memory"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --input-type=module -e \"import {pathToFileURL} from 'node:url'; import {join} from 'node:path'; await import(pathToFileURL(join(process.env.PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT, 'dist/codex/command.js')).href)\"",
+            "timeout": 3,
+            "statusMessage": "Burr local memory"
+          }
+        ]
+      }
+    ]
+  }
+}

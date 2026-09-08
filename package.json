@@ -46,7 +46,8 @@
     ".opencode/plugins/burr.mjs",
     "pi-extension/index.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "hooks/codex.json"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",

@@ -10,7 +10,10 @@ describe("Codex", () => {
     await withTempDir(async (dir) => {
       await runInit(dir);
       for (const name of SKILL_NAMES) {
-        const skill = await readFile(join(dir, ".agents", "skills", name, "SKILL.md"), "utf8");
+        const skill = await readFile(
+          join(dir, ".agents", "skills", name, "SKILL.md"),
+          "utf8",
+        );
         expect(skill).toContain(`name: ${name}`);
       }
     });
@@ -23,12 +26,24 @@ describe("Codex", () => {
     );
     expect(manifest.name).toBe("burr");
     expect(manifest.skills).toBe("./skills/");
+    expect(manifest.hooks).toBe("./hooks/codex.json");
+    const bundled = JSON.parse(
+      await readFile(join(root, "hooks", "codex.json"), "utf8"),
+    );
+    expect(Object.keys(bundled.hooks)).toEqual([
+      "SessionStart",
+      "PreToolUse",
+      "PostToolUse",
+      "SessionEnd",
+    ]);
   });
 
   it("never writes AGENTS.md, even when the project has none", async () => {
     await withTempDir(async (dir) => {
       await runInit(dir);
-      await expect(readFile(join(dir, "AGENTS.md"), "utf8")).rejects.toMatchObject({
+      await expect(
+        readFile(join(dir, "AGENTS.md"), "utf8"),
+      ).rejects.toMatchObject({
         code: "ENOENT",
       });
     });
@@ -36,15 +51,22 @@ describe("Codex", () => {
 
   it("leaves an existing AGENTS.md untouched", async () => {
     await withTempDir(async (dir) => {
-      await (await import("node:fs/promises")).writeFile(join(dir, "AGENTS.md"), "codex house rules\n");
+      await (
+        await import("node:fs/promises")
+      ).writeFile(join(dir, "AGENTS.md"), "codex house rules\n");
       await runInit(dir);
-      expect(await readFile(join(dir, "AGENTS.md"), "utf8")).toBe("codex house rules\n");
+      expect(await readFile(join(dir, "AGENTS.md"), "utf8")).toBe(
+        "codex house rules\n",
+      );
     });
   });
 
   it("help text tells Codex users to @ the skill names", async () => {
     const root = findPackageRoot();
-    const help = await readFile(join(root, "skills", "burr-help", "SKILL.md"), "utf8");
+    const help = await readFile(
+      join(root, "skills", "burr-help", "SKILL.md"),
+      "utf8",
+    );
     expect(help).toContain("@burr-search");
   });
 });

@@ -19,27 +19,50 @@ describe("burr global", () => {
     await withTempDir(async (home) => {
       process.env.BURR_HOME = home;
       const result = await runGlobal();
-      expect(result.created.some((path) => path.endsWith(".cursor/rules/burr.mdc"))).toBe(true);
-      expect(result.created.some((path) => path.endsWith(".windsurf/rules/burr.md"))).toBe(true);
+      expect(
+        result.created.some((path) => path.endsWith(".cursor/rules/burr.mdc")),
+      ).toBe(true);
+      expect(
+        result.created.some((path) => path.endsWith(".windsurf/rules/burr.md")),
+      ).toBe(true);
 
-      const cursor = await readFile(join(home, ".cursor", "rules", "burr.mdc"), "utf8");
+      const cursor = await readFile(
+        join(home, ".cursor", "rules", "burr.mdc"),
+        "utf8",
+      );
       expect(cursor).toContain("alwaysApply: true");
       expect(cursor).toContain("current project's `.burr/`");
-      expect(cursor).toContain("Never write playbooks or signals into another repo");
+      expect(cursor).toContain(
+        "Never write playbooks or signals into another repo",
+      );
 
       for (const name of SKILL_NAMES) {
-        const claude = await readFile(join(home, ".claude", "skills", name, "SKILL.md"), "utf8");
-        const agents = await readFile(join(home, ".agents", "skills", name, "SKILL.md"), "utf8");
-        const pi = await readFile(join(home, ".pi", "agent", "skills", name, "SKILL.md"), "utf8");
+        const claude = await readFile(
+          join(home, ".claude", "skills", name, "SKILL.md"),
+          "utf8",
+        );
+        const agents = await readFile(
+          join(home, ".agents", "skills", name, "SKILL.md"),
+          "utf8",
+        );
+        const pi = await readFile(
+          join(home, ".pi", "agent", "skills", name, "SKILL.md"),
+          "utf8",
+        );
         expect(claude).toContain(`name: ${name}`);
         expect(agents).toBe(claude);
         expect(pi).toBe(claude);
       }
 
-      const plugin = await readFile(join(home, ".config", "opencode", "plugins", "burr.mjs"), "utf8");
+      const plugin = await readFile(
+        join(home, ".config", "opencode", "plugins", "burr.mjs"),
+        "utf8",
+      );
       expect(plugin).toContain("experimental.chat.system.transform");
 
-      await expect(readFile(join(home, ".burr", "config.json"), "utf8")).rejects.toMatchObject({
+      await expect(
+        readFile(join(home, ".burr", "config.json"), "utf8"),
+      ).rejects.toMatchObject({
         code: "ENOENT",
       });
     });
@@ -51,8 +74,12 @@ describe("burr global", () => {
       await mkdir(join(home, ".cursor", "rules"), { recursive: true });
       await writeFile(join(home, ".cursor", "rules", "burr.mdc"), "# mine\n");
       const result = await runGlobal();
-      expect(await readFile(join(home, ".cursor", "rules", "burr.mdc"), "utf8")).toBe("# mine\n");
-      expect(result.skipped.some((path) => path.endsWith(".cursor/rules/burr.mdc"))).toBe(true);
+      expect(
+        await readFile(join(home, ".cursor", "rules", "burr.mdc"), "utf8"),
+      ).toBe("# mine\n");
+      expect(
+        result.skipped.some((path) => path.endsWith(".cursor/rules/burr.mdc")),
+      ).toBe(true);
     });
   });
 
@@ -71,19 +98,13 @@ describe("burr global", () => {
     await withTempDir(async (home) => {
       process.env.BURR_HOME = home;
       const file = join(home, ".cursor", "rules", "burr.mdc");
-      const instructions = await readFile(
-        join(findPackageRoot(), "templates", "global-instructions.md"),
-        "utf8",
-      );
       await mkdir(join(home, ".cursor", "rules"), { recursive: true });
       await writeFile(
         file,
-        `---
-description: Local debugging memory. Search shared Burr memory before non-trivial fixes.
-alwaysApply: true
----
-
-${instructions}`,
+        await readFile(
+          join(findPackageRoot(), "test", "fixtures", "global-v1.mdc"),
+          "utf8",
+        ),
       );
 
       await runGlobal();
@@ -116,7 +137,9 @@ ${instructions}`,
       process.env.BURR_HOME = home;
       const file = join(home, ".agents", "skills", "burr-audit", "SKILL.md");
       const edited = "---\nname: burr-audit\n---\n# Custom audit\n";
-      await mkdir(join(home, ".agents", "skills", "burr-audit"), { recursive: true });
+      await mkdir(join(home, ".agents", "skills", "burr-audit"), {
+        recursive: true,
+      });
       await writeFile(file, edited);
       const logs: string[] = [];
 
@@ -132,11 +155,16 @@ ${instructions}`,
       process.env.BURR_HOME = home;
       await withTempDir(async (project) => {
         await runGlobal();
-        const url = `${pathToFileURL(
-          join(home, ".config", "opencode", "plugins", "burr.mjs"),
-        ).href}?test=${Date.now()}`;
+        const url = `${
+          pathToFileURL(
+            join(home, ".config", "opencode", "plugins", "burr.mjs"),
+          ).href
+        }?test=${Date.now()}`;
         const plugin = await import(url);
-        const hooks = await plugin.default({ directory: project, worktree: project });
+        const hooks = await plugin.default({
+          directory: project,
+          worktree: project,
+        });
         expect(Object.keys(hooks.command)).toEqual([...SKILL_NAMES]);
         const output = { system: [] as string[] };
         await hooks["experimental.chat.system.transform"]({}, output);
@@ -151,12 +179,19 @@ describe("new project without init", () => {
     await withTempDir(async (home) => {
       process.env.BURR_HOME = home;
       await withTempDir(async (dir) => {
-        const result = await captureSignal(dir, {
-          error: "TypeError: Cannot read properties of undefined (reading 'id')",
-          whyKeep: "API dropped the id field",
-        }, { home });
+        const result = await captureSignal(
+          dir,
+          {
+            error:
+              "TypeError: Cannot read properties of undefined (reading 'id')",
+            whyKeep: "API dropped the id field",
+          },
+          { home },
+        );
         expect(result.ok).toBe(true);
-        const config = JSON.parse(await readFile(join(dir, ".burr", "config.json"), "utf8"));
+        const config = JSON.parse(
+          await readFile(join(dir, ".burr", "config.json"), "utf8"),
+        );
         expect(config.mode).toBe("on");
       });
     });

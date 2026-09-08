@@ -1,3 +1,4 @@
+import { codexHookCommand, mergeCodexHooks } from "../shared/codex.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -138,6 +139,12 @@ export async function runInit(
     const result = await mergeOpenCodePlugin(root, file, PLUGIN_PATH);
     await note(file, result);
   }
+
+  note(
+    ".codex/hooks.json",
+    await mergeCodexHooks(root, ".codex/hooks.json", codexHookCommand(pack)),
+  );
+  log("Review and trust Burr hooks in Codex /hooks before their first run.");
 
   log("Created:");
   if (created.length === 0) log("  (none)");

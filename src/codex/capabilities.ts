@@ -4,9 +4,9 @@ import type { BurrHarnessCapabilities } from "../shared/types.js";
 export const HARNESS_CAPABILITIES: Record<string, BurrHarnessCapabilities> = {
   codex: {
     name: "OpenAI Codex",
-    beforeToolObservation: false,
-    afterToolObservation: false,
-    blocking: false,
+    beforeToolObservation: true,
+    afterToolObservation: true,
+    blocking: true,
     contextInjection: true,
   },
   "claude-code": {

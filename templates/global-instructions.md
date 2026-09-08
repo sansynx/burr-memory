@@ -17,6 +17,9 @@ agent can reuse a verified fix. Capture and resolve write there.
 Read `.burr/config.json`. Mode is `on` (default), `strict`, or `off`.
 If `off`, do nothing Burr-related.
 
+Codex: `burr init` or `burr global` registers native session and tool hooks.
+Review new definitions in `/hooks`; do not bypass the host trust review.
+
 ## Do this
 
 1. Before a non-trivial fix, search `~/.burr/memory` first, then leftover

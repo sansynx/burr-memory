@@ -1,6 +1,7 @@
+import { codexHookCommand, mergeCodexHooks } from "../shared/codex.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { writeIfMissing, writeInside } from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
@@ -72,7 +73,11 @@ function markSkill(markdown: string): string {
 }
 
 export async function runGlobal(
-  options: { log?: (line: string) => void; home?: string } = {},
+  options: {
+    log?: (line: string) => void;
+    home?: string;
+    codexHome?: string;
+  } = {},
 ): Promise<GlobalResult> {
   const log = options.log ?? (() => undefined);
   const home = options.home ?? userHome();
@@ -199,6 +204,23 @@ export async function runGlobal(
     ),
   );
 
+  const customCodexHome =
+    options.codexHome ?? (options.home ? undefined : process.env.CODEX_HOME);
+  const codexHome = customCodexHome
+    ? resolve(customCodexHome)
+    : join(home, ".codex");
+  note(
+    customCodexHome
+      ? "Codex hooks.json (custom CODEX_HOME)"
+      : ".codex/hooks.json",
+    await mergeCodexHooks(
+      dirname(codexHome),
+      `${basename(codexHome)}/hooks.json`,
+      codexHookCommand(pack),
+    ),
+  );
+  log("Review and trust Burr hooks in Codex /hooks before their first run.");
+
   log("Created:");
   if (created.length === 0) log("  (none)");
   for (const path of created) log(`  ~/${path}`);
@@ -206,6 +228,7 @@ export async function runGlobal(
     log("Skipped (exists):");
     for (const path of skipped) log(`  ~/${path}`);
   }
+
   if (warnings.length) {
     log("Needs manual refresh (preserved because it may be edited):");
     for (const warning of warnings) log(warning);

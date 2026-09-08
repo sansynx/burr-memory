@@ -242,7 +242,10 @@ export async function cleanOldRuns(
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+      if (
+        entry.isFile() &&
+        (entry.name.endsWith(".jsonl") || entry.name.endsWith(".hooks.json"))
+      ) {
         const full = join(dir, entry.name);
         try {
           const st = await stat(full);

@@ -35,3 +35,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm pack --dry-run
+
+  codex-hooks:
+    name: Native Codex hooks / Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install isolated Codex test executable
+        shell: pwsh
+        run: |
+          $codexTestDirectory = Join-Path $env:RUNNER_TEMP 'burr-codex-test'
+          npm install --prefix $codexTestDirectory --no-save --package-lock=false @openai/codex@0.146.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "BURR_CODEX_CLI=$codexTestDirectory/node_modules/@openai/codex/bin/codex.js" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - run: npm exec -- vitest run test/codex/native.test.ts

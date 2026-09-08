@@ -67,11 +67,11 @@ flowchart LR
     Agent["Coding agent"] --> Burr["Burr skills and CLI"]
     Burr --> Project["Project .burr/<br/>config and usage"]
     Burr <-->|"search and save fixes"| Memory["Shared local memory<br/>~/.burr/memory/"]
-    Agent -.->|"optional integration"| Runtime["Runtime hooks<br/>loop checks and action ledger"]
+    Agent -.->|"native host hooks"| Runtime["Runtime hooks<br/>loop checks and action ledger"]
     Runtime -->|"verified lessons"| Memory
 ```
 
-Skills and CLI commands handle the debugging workflow. Pi and OpenCode adapters connect runtime tool observation; other hosts can call the exported handlers. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
+Skills and CLI commands handle the debugging workflow. Codex, Pi, and OpenCode adapters connect runtime tool observation; other hosts can call the exported handlers. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
 
 ## Learning and retention
 
@@ -100,7 +100,13 @@ if (check.blocked) {
 }
 ```
 
-`burr-memory/codex` exports `handleSessionStart`, `handlePreToolUse`, `handlePostToolUse`, `handleSessionEnd`, and compaction helpers. Custom integrations call these functions with a consistent session ID, project root, and verification evidence. The installed Pi extension observes tool calls and results and can block repeated failures. The OpenCode plugin registers native before/after tool hooks; newly generated copies point to the local package runtime, so keep that package installation available. Rerun `burr init` or `burr global` to upgrade an unchanged previous OpenCode adapter; edited copies are preserved. Session completion alone never promotes a fix. `burr init` installs Codex skills; it does not register these lifecycle functions with Codex automatically.
+Codex uses native `SessionStart`, `PreToolUse`, `PostToolUse`, and `SessionEnd` hooks. `burr init` merges registrations into `.codex/hooks.json`; `burr global` uses `$CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`). The Codex plugin bundles the same hooks. Existing unrelated hooks are preserved, and duplicate tool events from multiple sources are recorded once. Keep the installed package available: generated commands reference its built runtime.
+
+Review new hooks in Codex `/hooks` once; Codex requires trust for each hook definition. Burr preserves that requirement and existing approval settings. Native execution and denial were tested with Codex CLI 0.146.0 using an isolated local test provider. Hosted tools such as web search do not emit these local tool hooks. See the [Codex hook protocol](https://learn.chatgpt.com/docs/hooks).
+
+The Pi extension and OpenCode plugin also connect native tool events. Rerun `burr init` or `burr global` to upgrade an unchanged previous OpenCode adapter; edited copies are preserved. Session completion alone never promotes a fix. Custom integrations can still call the lifecycle exports from `burr-memory/codex` with explicit verification evidence.
+
+For a local plugin checkout, run `npm install` and `npm run build` before loading it. To repeat the native smoke test, set `BURR_CODEX_CLI` to an installed Codex `bin/codex.js`, run `npm run build`, then `npm exec -- vitest run test/codex/native.test.ts`. It uses temporary storage and a local scripted provider, not an API key or a live model.
 
 ---
 
@@ -168,14 +174,14 @@ burr dashboard --port 4747
 
 ## Hosts
 
-| Host        | Always-on                   | Commands                             | `init` writes                             |
-| ----------- | --------------------------- | ------------------------------------ | ----------------------------------------- |
-| Claude Code | skill descriptions          | `/burr*` via `.claude/skills`        | those skill copies                        |
-| Codex       | `@` `.burr/instructions.md` | `@burr*` via plugin / visible skills | `.agents/skills`                          |
-| OpenCode    | plugin injects the rule     | `/burr*` via plugin                  | `.opencode/plugins/burr.mjs` + json merge |
-| Pi          | skill descriptions          | `/skill:burr*`                       | `.pi/skills` and `.agents/skills`         |
-| Cursor      | `.cursor/rules/burr.mdc`    | none                                 | that rule file                            |
-| Windsurf    | `.windsurf/rules/burr.md`   | none                                 | that rule file                            |
+| Host        | Always-on                     | Commands                             | `init` writes                                |
+| ----------- | ----------------------------- | ------------------------------------ | -------------------------------------------- |
+| Claude Code | skill descriptions            | `/burr*` via `.claude/skills`        | those skill copies                           |
+| Codex       | native session and tool hooks | `@burr*` via plugin / visible skills | `.agents/skills` + `.codex/hooks.json` merge |
+| OpenCode    | plugin injects the rule       | `/burr*` via plugin                  | `.opencode/plugins/burr.mjs` + json merge    |
+| Pi          | skill descriptions            | `/skill:burr*`                       | `.pi/skills` and `.agents/skills`            |
+| Cursor      | `.cursor/rules/burr.mdc`      | none                                 | that rule file                               |
+| Windsurf    | `.windsurf/rules/burr.md`     | none                                 | that rule file                               |
 
 Canonical skills live once in `skills/`. `init` creates the host-specific
 copies and adapters each tool expects.
