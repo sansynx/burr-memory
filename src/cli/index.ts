@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runCompare } from "./compare.js";
 import { runDashboard } from "./dashboard.js";
 import { runDoctor } from "./doctor.js";
@@ -267,12 +269,19 @@ export async function main(argv: string[]): Promise<number> {
   return 1;
 }
 
-const invoked = process.argv[1]?.replaceAll("\\", "/");
-if (
-  invoked &&
-  /(?:^|\/)(?:index|cli)(?:\.(?:js|ts))?$/.test(invoked) &&
-  !process.env.VITEST
-) {
+function isEntrypoint(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (isEntrypoint()) {
   main(process.argv.slice(2)).then(
     (code) => {
       process.exitCode = code;
