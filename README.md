@@ -65,17 +65,7 @@ Burr checks verification text for evidence of success; it does not execute that 
 
 ## How it fits together
 
-```mermaid
-flowchart LR
-    Agent["Coding agent"] --> CLI["Skills and CLI"]
-    Agent --> Host["Supported host adapter"]
-    CLI <-->|"Search / save"| Memory["Local memory<br/>~/.burr/memory/"]
-    Host --> Runtime["Tool checks and outcomes"]
-    Runtime --> Runs["Local run history"]
-    Runtime <-->|"Retrieve / learn"| Memory
-    CLI --> Project["Project .burr/<br/>config and usage"]
-    Project -.-> Runtime
-```
+![Burr architecture: a coding agent uses skills and CLI or a supported host adapter; both use local memory, while the runtime records local run history.](https://raw.githubusercontent.com/sansynx/burr-memory/5052e5f829db8623852faee2b99276b3dfb8a43a/assets/burr-architecture.svg)
 
 The CLI stores Markdown signals and playbooks. The runtime stores structured JSON lessons and JSONL tool histories; verified runtime playbooks also get Markdown exports. These are separate retrieval paths. Nothing is uploaded by Burr. See [architecture and storage](ARCHITECTURE.md) and the compact [workflow diagram](assets/burr-how-it-works.svg).
 

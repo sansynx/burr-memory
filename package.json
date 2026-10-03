@@ -41,6 +41,7 @@
     "templates/instructions.md",
     "assets/burr-mark.svg",
     "assets/burr-how-it-works.svg",
+    "assets/burr-architecture.svg",
     ".claude-plugin/plugin.json",
     ".codex-plugin/plugin.json",
     ".opencode/plugins/burr.mjs",
