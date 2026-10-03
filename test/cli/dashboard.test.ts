@@ -4,6 +4,7 @@ import { get } from "node:http";
 import { runInNewContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runDashboard } from "../../src/cli/dashboard.js";
+import { saveMemoryItem } from "../../src/learning/consolidator.js";
 import { withTempDir } from "../helpers.js";
 
 const servers = vi.hoisted(() => [] as Server[]);
@@ -26,7 +27,7 @@ afterEach(async () => {
   }
 });
 
-async function withDashboard(fn: (url: string) => Promise<void>) {
+async function withDashboard(fn: (url: string, home: string) => Promise<void>) {
   await withTempDir(async (home) => {
     const listeners = new Set(process.listeners("SIGINT"));
     void runDashboard({ home, port: 0 });
@@ -35,7 +36,7 @@ async function withDashboard(fn: (url: string) => Promise<void>) {
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("No address");
     try {
-      await fn(`http://127.0.0.1:${address.port}`);
+      await fn(`http://127.0.0.1:${address.port}`, home);
     } finally {
       for (const listener of process.listeners("SIGINT")) {
         if (!listeners.has(listener))
@@ -46,6 +47,40 @@ async function withDashboard(fn: (url: string) => Promise<void>) {
 }
 
 describe("local dashboard", () => {
+  it("counts and displays only active memories", async () => {
+    await withDashboard(async (url, home) => {
+      for (const status of ["active", "stale", "archived"] as const) {
+        await saveMemoryItem(
+          {
+            id: `fixture-${status}`,
+            title: "Synthetic fixture",
+            statement: "Synthetic fixture",
+            type: "knowledge",
+            status,
+            scope: { level: "global" },
+            confidence: 0.8,
+            evidence: {
+              observed: 1,
+              successfulReuse: 0,
+              failedReuse: 0,
+              lastUsed: new Date().toISOString(),
+              sessionIds: [],
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          home,
+        );
+      }
+      const stats = await (await fetch(`${url}/api/stats`)).json();
+      expect(stats.memory.active).toBe(1);
+      expect(stats.memory.archived).toBe(1);
+      const memories = await (await fetch(`${url}/api/memories`)).json();
+      expect(memories.map((item: { status: string }) => item.status)).toEqual([
+        "active",
+      ]);
+    });
+  });
   it("serves local data without allowing cross-origin reads", async () => {
     await withDashboard(async (url) => {
       const response = await fetch(`${url}/api/stats`);

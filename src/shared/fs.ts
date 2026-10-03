@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { mkdir, lstat, open, realpath, unlink } from "node:fs/promises";
+import { mkdir, lstat, open, realpath, rename, unlink } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
@@ -119,10 +119,42 @@ async function assertOpenedFile(
 
 async function prepareInside(root: string, target: string): Promise<string> {
   const dest = await guardedPath(root, target);
-  await mkdir(dirname(dest), { recursive: true });
+  await ensureDirectoryInside(root, dirname(dest));
   await assertNoSymlinkSegments(root, dest);
   await assertCanonicalParent(root, dest);
   return dest;
+}
+
+export async function ensureDirectoryInside(
+  root: string,
+  target: string,
+): Promise<void> {
+  const dest = await guardedPath(root, target);
+  try {
+    const existing = await lstat(dest);
+    if (!existing.isDirectory())
+      throw new BurrFsError(`Refusing non-directory: ${dest}`);
+    if (dest !== resolve(root)) await assertCanonicalParent(root, dest);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  let current = resolve(root);
+  for (const segment of relative(current, dest)
+    .split(/[\\/]/)
+    .filter(Boolean)) {
+    current = resolve(current, segment);
+    await assertNoSymlinkSegments(root, current);
+    await assertCanonicalParent(root, current);
+    try {
+      await mkdir(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    const info = await lstat(current);
+    if (info.isSymbolicLink() || !info.isDirectory())
+      throw new BurrFsError(`Refusing symlink or non-directory: ${current}`);
+  }
 }
 
 async function refuseUnstablePath(
@@ -145,7 +177,6 @@ async function writeSafely(
   dest: string,
   flags: number,
   data: string,
-  truncate = false,
 ): Promise<void> {
   const handle = await open(dest, flags | constants.O_NOFOLLOW, 0o600);
   try {
@@ -153,7 +184,6 @@ async function writeSafely(
       await assertCanonicalParent(root, dest);
       await assertOpenedFile(handle, dest);
     });
-    if (truncate) await handle.truncate(0);
     await handle.writeFile(data, "utf8");
   } finally {
     await handle.close();
@@ -186,13 +216,42 @@ export async function writeInside(
   data: string,
 ): Promise<string> {
   const dest = await prepareInside(root, target);
-  await writeSafely(
-    root,
+  const original = await open(
     dest,
-    constants.O_WRONLY | constants.O_CREAT,
-    data,
-    true,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW,
+    0o600,
   );
+  const temporary = `${dest}.${randomUUID()}.tmp`;
+  try {
+    await refuseUnstablePath(dest, () => assertOpenedFile(original, dest));
+    await writeSafely(
+      root,
+      temporary,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      data,
+    );
+    const staged = await open(
+      temporary,
+      constants.O_RDWR | constants.O_NOFOLLOW,
+    );
+    try {
+      await assertOpenedFile(staged, temporary);
+      await staged.sync();
+    } finally {
+      await staged.close();
+    }
+    await assertNoSymlinkSegments(root, dest);
+    await assertCanonicalParent(root, dest);
+    await assertOpenedFile(original, dest);
+    // Windows requires closing the destination handle before replacement.
+    await original.close();
+    await rename(temporary, dest);
+  } finally {
+    await original.close();
+    await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
   return dest;
 }
 
@@ -221,6 +280,7 @@ export async function readInside(
   const handle = await open(dest, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     await assertCanonicalParent(root, dest);
+    await assertOpenedFile(handle, dest);
     const text = await handle.readFile("utf8");
     const after = await lstat(dest);
     if (
@@ -235,6 +295,16 @@ export async function readInside(
   } finally {
     await handle.close();
   }
+}
+
+export async function fileStampInside(
+  root: string,
+  target: string,
+): Promise<string> {
+  const dest = await guardedPath(root, target);
+  await assertCanonicalParent(root, dest);
+  const info = await assertUnlinkedFile(dest);
+  return `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
 }
 
 export async function removeInside(
@@ -259,7 +329,7 @@ export async function withInsideLock<T>(
   action: () => Promise<T>,
 ): Promise<T> {
   const dest = await prepareInside(root, target);
-  const token = `${randomUUID()}\n`;
+  const token = `${process.pid}:${randomUUID()}\n`;
   for (let attempt = 0; ; attempt += 1) {
     try {
       const handle = await open(
@@ -298,8 +368,32 @@ export async function withInsideLock<T>(
         throw new BurrFsError(`Refusing lock at non-file path: ${target}`);
       }
       if (Date.now() - existing.mtimeMs > 30_000) {
-        await unlink(dest);
-        continue;
+        const owner = await readInside(root, dest).catch(() => "");
+        const pid = Number(owner.split(":")[0]);
+        let alive = false;
+        if (Number.isSafeInteger(pid) && pid > 0) {
+          try {
+            process.kill(pid, 0);
+            alive = true;
+          } catch (error) {
+            alive = (error as NodeJS.ErrnoException).code !== "ESRCH";
+          }
+        }
+        if (!alive) {
+          // Serialize stale-owner checks so a second reaper cannot remove a new lock.
+          const recovery = `${dest}.recovery`;
+          await withInsideLock(root, recovery, async () => {
+            const current = await readInside(root, dest).catch(() => "");
+            if (current === owner) {
+              await removeInside(root, dest).catch(
+                (error: NodeJS.ErrnoException) => {
+                  if (error.code !== "ENOENT") throw error;
+                },
+              );
+            }
+          });
+          continue;
+        }
       }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
     }

@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { clip } from "../shared/bounds.js";
 import { tokenize } from "../shared/tokens.js";
-import type { BurrAction, LoopDetectionResult, LoopRiskLevel, RuntimeConfig } from "../shared/types.js";
+import type {
+  BurrAction,
+  LoopDetectionResult,
+  LoopRiskLevel,
+  RuntimeConfig,
+} from "../shared/types.js";
 import { DEFAULT_RUNTIME_CONFIG } from "../shared/config.js";
 
 export function canonicalize(val: unknown): unknown {
@@ -27,15 +32,25 @@ export function fingerprintInput(tool: string, args: unknown): string {
 }
 
 export function fingerprintOutput(output: unknown): string {
-  const text = typeof output === "string" ? output : JSON.stringify(canonicalize(output));
-  const normalized = clip(String(text ?? "").trim().replace(/\r\n/g, "\n"), 2000);
+  const text =
+    typeof output === "string" ? output : JSON.stringify(canonicalize(output));
+  const normalized = clip(
+    String(text ?? "")
+      .trim()
+      .replace(/\r\n/g, "\n"),
+    2000,
+  );
   return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
-export function setJaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+export function setJaccardSimilarity(
+  setA: Set<string>,
+  setB: Set<string>,
+): number {
   if (setA.size === 0 && setB.size === 0) return 1.0;
   if (setA.size === 0 || setB.size === 0) return 0.0;
-  const [smaller, larger] = setA.size <= setB.size ? [setA, setB] : [setB, setA];
+  const [smaller, larger] =
+    setA.size <= setB.size ? [setA, setB] : [setB, setA];
   let intersection = 0;
   for (const t of smaller) {
     if (larger.has(t)) intersection += 1;
@@ -44,7 +59,10 @@ export function setJaccardSimilarity(setA: Set<string>, setB: Set<string>): numb
   return union === 0 ? 0 : intersection / union;
 }
 
-export function jaccardSimilarity(tokensA: string[], tokensB: string[]): number {
+export function jaccardSimilarity(
+  tokensA: string[],
+  tokensB: string[],
+): number {
   if (tokensA.length === 0 && tokensB.length === 0) return 1.0;
   if (tokensA.length === 0 || tokensB.length === 0) return 0.0;
   return setJaccardSimilarity(new Set(tokensA), new Set(tokensB));
@@ -57,7 +75,8 @@ export function extractArgTokens(args: unknown): string[] {
     const chunks: string[] = [];
     for (const value of Object.values(args as Record<string, unknown>)) {
       if (typeof value === "string") chunks.push(value);
-      else if (typeof value === "number" || typeof value === "boolean") chunks.push(String(value));
+      else if (typeof value === "number" || typeof value === "boolean")
+        chunks.push(String(value));
       else if (typeof value === "object" && value !== null) {
         chunks.push(JSON.stringify(value));
       }
@@ -129,7 +148,9 @@ export function detectCycle(
     let isMatch = true;
 
     for (let i = 0; i < len; i += 1) {
-      if (tools[tools.length - len - 1 - i] !== pattern[pattern.length - 1 - i]) {
+      if (
+        tools[tools.length - len - 1 - i] !== pattern[pattern.length - 1 - i]
+      ) {
         isMatch = false;
         break;
       }
@@ -147,9 +168,10 @@ export function detectCycle(
   return { detected: false };
 }
 
-export function detectOutputStagnation(
-  recentActions: BurrAction[],
-): { detected: boolean; count: number } {
+export function detectOutputStagnation(recentActions: BurrAction[]): {
+  detected: boolean;
+  count: number;
+} {
   if (recentActions.length < 2) return { detected: false, count: 0 };
 
   const completed = recentActions.filter(
@@ -198,7 +220,12 @@ export function evaluateLoopRisk(
   const currentFingerprint = fingerprintInput(tool, args);
 
   const exact = detectExactRepetition(currentFingerprint, windowActions);
-  const fuzzy = detectFuzzyRepetition(tool, args, windowActions, config.fuzzyThreshold);
+  const fuzzy = detectFuzzyRepetition(
+    tool,
+    args,
+    windowActions,
+    config.fuzzyThreshold,
+  );
   const cycle = detectCycle(tool, windowActions);
   const stagnation = detectOutputStagnation(windowActions);
 
@@ -227,8 +254,34 @@ export function evaluateLoopRisk(
   }
 
   const boundedScore = Math.min(100, score);
+  // Repetition is normal while editing and verifying. Only repeated failures
+  // justify denying an action; successful reads and polling remain warnings.
+  const sameTool = windowActions.filter(
+    (action) => action.tool.trim().toLowerCase() === tool.trim().toLowerCase(),
+  );
+  const lastSuccess = sameTool.reduce(
+    (last, action, index) => (action.status === "completed" ? index : last),
+    -1,
+  );
+  const failures = sameTool
+    .slice(lastSuccess + 1)
+    .filter((action) => action.status === "failed");
+  const lastFailure = failures.at(-1);
+  const repeatedFailure =
+    failures.length >= 2 &&
+    failures.some(
+      (action) =>
+        action !== lastFailure &&
+        ((action.inputFingerprint === currentFingerprint &&
+          lastFailure?.inputFingerprint === currentFingerprint) ||
+          (action.outputFingerprint &&
+            action.outputFingerprint === lastFailure?.outputFingerprint)),
+    );
   let level: LoopRiskLevel = "record";
-  if (boundedScore >= config.blockScore) {
+  if (
+    boundedScore >= config.blockScore &&
+    (repeatedFailure || config.blockScore === 0)
+  ) {
     level = "block";
   } else if (boundedScore >= config.warnScore) {
     level = "warn";
@@ -253,6 +306,7 @@ export function detectActionLoop(
   args: unknown,
   recentActions: BurrAction[],
   config: Partial<RuntimeConfig> = {},
+  options: { recentFailedVerify?: boolean } = {},
 ): {
   blocked: boolean;
   score: number;
@@ -265,7 +319,13 @@ export function detectActionLoop(
     ...DEFAULT_RUNTIME_CONFIG,
     ...config,
   };
-  const result = evaluateLoopRisk(tool, args, recentActions, mergedConfig);
+  const result = evaluateLoopRisk(
+    tool,
+    args,
+    recentActions,
+    mergedConfig,
+    options,
+  );
   const blocked = result.level === "block";
 
   let suggestedAction: string | undefined;
@@ -304,9 +364,10 @@ export class LoopDetector {
   private autoRecord: boolean;
 
   constructor(options: LoopDetectorOptions | Partial<RuntimeConfig> = {}) {
-    const opts = "config" in options || "autoRecord" in options
-      ? (options as LoopDetectorOptions)
-      : { config: options as Partial<RuntimeConfig> };
+    const opts =
+      "config" in options || "autoRecord" in options
+        ? (options as LoopDetectorOptions)
+        : { config: options as Partial<RuntimeConfig> };
     this.config = {
       ...DEFAULT_RUNTIME_CONFIG,
       ...opts.config,
@@ -326,10 +387,21 @@ export class LoopDetector {
     suggestedAction?: string;
     details?: Record<string, unknown>;
   } {
-    const res = detectActionLoop(tool, args, this.actions, this.config);
+    const res = detectActionLoop(
+      tool,
+      args,
+      this.actions,
+      this.config,
+      options,
+    );
     const shouldRecord = options.record ?? this.autoRecord;
     if (shouldRecord) {
-      this.recordAction(tool, args, undefined, res.blocked ? "failed" : "completed");
+      this.recordAction(
+        tool,
+        args,
+        undefined,
+        res.blocked ? "failed" : "completed",
+      );
     }
     return res;
   }

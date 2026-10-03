@@ -12,35 +12,35 @@ const COMMANDS = {
   burr: {
     description: "Show Burr status or set its mode",
     template:
-      "Run `npx burr status` and report the result. If the user requests on, strict, or off, run `npx burr <mode>` instead.",
+      "Run `burr status` and report the result. If the user requests on, strict, or off, run `burr <mode>` instead.",
   },
   "burr-search": {
     description: "Search shared Burr memory",
     template:
-      "Search `~/.burr/memory/` by running `npx burr search <query>` with the user's redacted error or context, then report the useful hits.",
+      "Search `~/.burr/memory/` by running `burr search <query>` with the user's redacted error or context, then report the useful hits.",
   },
   "burr-capture": {
     description: "Capture a reusable failure",
     template:
-      "For a reusable failure, run `npx burr capture --error <text>` with relevant optional flags. Redact sensitive data first.",
+      "For a reusable failure, run `burr capture --error <text>` with relevant optional flags. Redact sensitive data first.",
   },
   "burr-resolve": {
     description: "Write a verified Burr playbook",
     template:
-      "Only after a real verification, run `npx burr resolve --error <text> --cause <text> --fix <text> --verify <text>`.",
+      "Only after a real verification, run `burr resolve --error <text> --cause <text> --fix <text> --verify <text>`.",
   },
   "burr-promote": {
     description: "Promote a legacy project playbook",
     template:
-      "Run `npx burr promote [path]` only for a legacy project playbook that belongs in shared Burr memory.",
+      "Run `burr promote [path]` only for a legacy project playbook that belongs in shared Burr memory.",
   },
   "burr-audit": {
     description: "Audit Burr usage",
-    template: "Run `npx burr audit` and summarize the local usage ledger.",
+    template: "Run `burr audit` and summarize the local usage ledger.",
   },
   "burr-help": {
     description: "Show Burr command help",
-    template: "Run `npx burr help` and present the command reference.",
+    template: "Run `burr help` and present the command reference.",
   },
 } as const;
 
@@ -81,7 +81,19 @@ function readText(path: string): string {
 }
 
 function projectRoot(ctx?: { cwd?: string }): string {
-  return ctx?.cwd || process.cwd();
+  const cwd = ctx?.cwd || process.cwd();
+  let candidate = cwd;
+  for (;;) {
+    try {
+      readFileSync(join(candidate, ".burr", "config.json"), "utf8");
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return candidate;
+    }
+    const parent = dirname(candidate);
+    if (parent === candidate) return cwd;
+    candidate = parent;
+  }
 }
 
 function loadMode(root: string): "on" | "strict" | "off" {

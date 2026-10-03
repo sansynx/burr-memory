@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { evaluateCandidateAdmission } from "../../src/learning/admission.js";
 import {
   applyMemoryDecayAndPruning,
+  consolidateMemories,
   trimCandidates,
   getMemory,
   listAllMemories,
@@ -17,6 +18,8 @@ import {
 import { loadConfig } from "../../src/shared/config.js";
 import { runInit } from "../../src/cli/init.js";
 import { reflectOnSession } from "../../src/learning/reflection.js";
+import { retrieveRelevantMemories } from "../../src/learning/retrieval.js";
+import { searchMemoryFiles } from "../../src/shared/search.js";
 import { recordAction } from "../../src/runtime/action-ledger.js";
 import type { CandidateLesson, MemoryItem } from "../../src/shared/types.js";
 import { withTempDir } from "../helpers.js";
@@ -41,6 +44,220 @@ function mockCandidate(
     ...overrides,
   };
 }
+
+describe("learning integrity regressions", () => {
+  it("preserves redacted detailed playbook evidence through reflection and promotion", async () => {
+    await withTempDir(async (home) => {
+      const secret = ["synthetic", "private", "value"].join("-");
+      const error = `TypeError ${"detail ".repeat(30)}specific failure`;
+      const rootCause =
+        "Nested response payload omits the required user identifier";
+      const fix = `${"Check the response structure. ".repeat(10)}Read response.user.identifier instead`;
+      const result = await reflectOnSession({
+        sessionId: "detailed",
+        scope: { level: "global" },
+        verified: true,
+        verificationCommand: "npm test",
+        verificationOutput: `14 passed; token=${secret}`,
+        error,
+        rootCause,
+        fix,
+        home,
+      });
+      const candidate = result.candidates.find(
+        (entry) => entry.type === "playbook",
+      )!;
+      await saveCandidate(candidate, home);
+      await consolidateMemories(home);
+      const item = (await listAllMemories(home))[0]!;
+      expect(item.problem).toBe(error);
+      expect(item.rootCause).toBe(rootCause);
+      expect(item.fix).toBe(fix);
+      expect(item.verification?.result).toContain("14 passed");
+      expect(item.verification?.result).not.toContain(secret);
+      const markdown = await readFile(
+        join(home, ".burr/memory/playbooks", `${item.id}.md`),
+        "utf8",
+      );
+      expect(markdown).toContain(rootCause);
+      expect(markdown).toContain("Read response.user.identifier instead");
+      expect(markdown).not.toContain(secret);
+      const other = await reflectOnSession({
+        sessionId: "other",
+        scope: { level: "global" },
+        verified: true,
+        error,
+        rootCause: "Different cause",
+        fix,
+        home,
+      });
+      expect(other.candidates[0]?.id).not.toBe(candidate.id);
+      await saveCandidate(other.candidates[0]!, home);
+      await consolidateMemories(home);
+      expect(await listAllMemories(home)).toHaveLength(2);
+    });
+  });
+
+  it("moves a directly saved status transition without duplicate memory files", async () => {
+    await withTempDir(async (home) => {
+      const item = await promoteCandidate(
+        mockCandidate({ type: "playbook" }),
+        home,
+      );
+      await saveMemoryItem({ ...item, status: "archived" }, home);
+      expect(await listAllMemories(home)).toHaveLength(1);
+      expect((await getMemory(item.id, home))?.status).toBe("archived");
+      expect(
+        await searchMemoryFiles(home, "Authentication middleware", { home }),
+      ).toEqual([]);
+      await saveMemoryItem(item, home);
+      expect(await listAllMemories(home)).toHaveLength(1);
+      expect((await getMemory(item.id, home))?.status).toBe("active");
+    });
+  });
+
+  it("consolidates concurrently without duplicate promotions or replayed evidence", async () => {
+    await withTempDir(async (home) => {
+      const candidate = mockCandidate();
+      await saveCandidate(candidate, home);
+      await Promise.all([
+        consolidateMemories(home),
+        consolidateMemories(home),
+        applyMemoryDecayAndPruning(home),
+      ]);
+      let memories = await listAllMemories(home);
+      expect(memories).toHaveLength(1);
+      expect(memories[0]?.evidence.observed).toBe(3);
+      await saveCandidate(candidate, home);
+      await consolidateMemories(home);
+      memories = await listAllMemories(home);
+      expect(memories[0]?.evidence.observed).toBe(3);
+      expect(await listCandidates(home)).toEqual([]);
+    });
+  });
+
+  it("serializes concurrent reuse and counts a merged session only once", async () => {
+    await withTempDir(async (home) => {
+      const item = await promoteCandidate(mockCandidate(), home);
+      await Promise.all(
+        Array.from({ length: 10 }, () =>
+          recordMemoryReuse(item.id, true, home),
+        ),
+      );
+      expect((await getMemory(item.id, home))?.evidence.successfulReuse).toBe(
+        10,
+      );
+      const candidate = mockCandidate({
+        id: "cand-replay",
+        evidence: { sessionId: "session-2", observedCount: 2, verified: true },
+      });
+      await Promise.all(
+        Array.from({ length: 4 }, () =>
+          mergeCandidate(candidate, item.id, home),
+        ),
+      );
+      const merged = await getMemory(item.id, home);
+      expect(merged?.evidence.observed).toBe(5);
+      expect(merged?.statement).toBe(item.statement);
+    });
+  });
+
+  it("ignores invalid records and mismatched filenames", async () => {
+    await withTempDir(async (home) => {
+      const item = await promoteCandidate(mockCandidate(), home);
+      await writeFile(
+        join(home, ".burr/memory/knowledge/bad.json"),
+        JSON.stringify({ id: "bad", status: "active" }),
+      );
+      await writeFile(
+        join(home, ".burr/memory/knowledge/wrong.json"),
+        JSON.stringify(item),
+      );
+      await writeFile(
+        join(home, ".burr/candidates/bad.json"),
+        JSON.stringify({
+          id: "bad",
+          statement: "This candidate has no evidence",
+        }),
+      );
+      expect(await listAllMemories(home)).toHaveLength(1);
+      expect(await listCandidates(home)).toEqual([]);
+      await expect(retrieveRelevantMemories({ home })).resolves.toBeDefined();
+      await expect(consolidateMemories(home)).resolves.toEqual({
+        promoted: 0,
+        merged: 0,
+        discarded: 0,
+      });
+    });
+  });
+
+  it("keeps every scope dimension in admission and candidate identity", async () => {
+    await withTempDir(async (home) => {
+      const scope = {
+        level: "framework" as const,
+        framework: "react",
+        package: "router",
+        packageVersion: "1",
+        tool: "test",
+        language: "typescript",
+      };
+      const item = await promoteCandidate(mockCandidate({ scope }), home);
+      for (const key of [
+        "framework",
+        "package",
+        "packageVersion",
+        "tool",
+        "language",
+      ] as const) {
+        expect(
+          evaluateCandidateAdmission(
+            mockCandidate({ scope: { ...scope, [key]: "different" } }),
+            [item],
+          ).decision,
+        ).toBe("promote");
+      }
+      const input = {
+        sessionId: "empty",
+        verified: true,
+        error: "Synthetic error",
+        rootCause: "Missing guard",
+        fix: "Add the guard",
+        home,
+      };
+      const first = await reflectOnSession({ ...input, scope });
+      const second = await reflectOnSession({
+        ...input,
+        scope: { ...scope, framework: "vue" },
+      });
+      expect(first.candidates[0]?.id).not.toBe(second.candidates[0]?.id);
+    });
+  });
+
+  it("removes archived playbooks from markdown search and revives new evidence", async () => {
+    await withTempDir(async (home) => {
+      const candidate = mockCandidate({ type: "playbook" });
+      const item = await promoteCandidate(candidate, home);
+      item.evidence.lastUsed = new Date(0).toISOString();
+      await saveMemoryItem(item, home);
+      await applyMemoryDecayAndPruning(home);
+      expect(
+        await searchMemoryFiles(home, "Authentication middleware", { home }),
+      ).toEqual([]);
+      await mergeCandidate(
+        {
+          ...candidate,
+          evidence: { ...candidate.evidence, sessionId: "new-session" },
+        },
+        item.id,
+        home,
+      );
+      expect((await getMemory(item.id, home))?.status).toBe("active");
+      expect(
+        (await listAllMemories(home)).filter((memory) => memory.id === item.id),
+      ).toHaveLength(1);
+    });
+  });
+});
 
 describe("Memory Lifecycle: Admission, Consolidation & Decay", () => {
   describe("candidate admission evaluation", () => {

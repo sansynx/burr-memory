@@ -5,7 +5,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { writeIfMissing, writeInside } from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
-import { mergeOpenCodePlugin } from "../shared/opencode.js";
+import {
+  isLegacyOpenCodePlugin,
+  mergeOpenCodePlugin,
+} from "../shared/opencode.js";
 import { findPackageRoot } from "../shared/package-root.js";
 
 const SKILLS = [
@@ -17,13 +20,6 @@ const SKILLS = [
   "burr-audit",
   "burr-help",
 ] as const;
-
-const CURSOR_FRONTMATTER = `---
-description: Local debugging memory. Search shared Burr memory before non-trivial fixes.
-alwaysApply: true
----
-
-`;
 
 const PLUGIN_PATH = "./plugins/burr.mjs";
 const MANAGED_MARKER = "burr-managed: 2";
@@ -102,6 +98,8 @@ export async function runGlobal(
     try {
       const existing = await readFile(dest, "utf8");
       if (
+        (rel === ".config/opencode/plugins/burr.mjs" &&
+          isLegacyOpenCodePlugin(existing)) ||
         knownLegacy.includes(
           createHash("sha256")
             .update(existing.replace(/\r\n/g, "\n"))
@@ -113,21 +111,8 @@ export async function runGlobal(
       } else if (existing.includes(MANAGED_MARKER)) {
         result = "skipped";
       } else {
-        const hash = createHash("sha256")
-          .update(existing.replace(/\r\n/g, "\n"))
-          .digest("hex");
-        if (
-          /burr-managed:\s*\d+/.test(existing) ||
-          knownLegacy.includes(hash)
-        ) {
-          await writeInside(home, dest, data);
-          result = "created";
-        } else {
-          warnings.push(
-            `  ~/${posix(rel)} (legacy or edited; replace manually)`,
-          );
-          result = "skipped";
-        }
+        warnings.push(`  ~/${posix(rel)} (legacy or edited; replace manually)`);
+        result = "skipped";
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -146,17 +131,9 @@ export async function runGlobal(
     ),
   ]);
   const managedInstructions = `<!-- ${MANAGED_MARKER} -->\n${instructions}`;
-  const cursor = `${CURSOR_FRONTMATTER}${managedInstructions}`;
   const windsurf = managedInstructions.endsWith("\n")
     ? managedInstructions
     : `${managedInstructions}\n`;
-
-  await write(".cursor/rules/burr.mdc", cursor, [
-    "449e17fdf0dca721281103adaa41e39c937cbc22761022687eee3df3e23a9aaa",
-  ]);
-  await write(".windsurf/rules/burr.md", windsurf, [
-    "ef5d6f893d986c504e29e47d7d8a2f76194ba354a1e0bff989b227aa78db97e9",
-  ]);
 
   for (let i = 0; i < SKILLS.length; i += 1) {
     const name = SKILLS[i]!;
@@ -234,7 +211,10 @@ export async function runGlobal(
     for (const warning of warnings) log(warning);
   }
   log(
-    "Burr is on for new projects. Playbooks live in ~/.burr/memory/ on this machine.",
+    "Burr skills and supported host integrations are installed. Playbooks live in ~/.burr/memory/ on this machine.",
+  );
+  log(
+    "Cursor and Windsurf: run burr init in each project, or add Burr instructions through the editor's global rule settings.",
   );
   log("No key asked. No network used.");
 

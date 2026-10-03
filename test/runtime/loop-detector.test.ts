@@ -29,11 +29,43 @@ function mockAction(overrides: Partial<BurrAction> = {}): BurrAction {
 }
 
 describe("Loop Detector", () => {
+  it("does not block productive repeated verification", () => {
+    const actions = [
+      mockAction({
+        tool: "test",
+        normalizedArgs: { cmd: "test" },
+        inputFingerprint: fingerprintInput("test", { cmd: "test" }),
+        outputFingerprint: "one-passed",
+      }),
+      mockAction({
+        tool: "edit",
+        inputFingerprint: "edit-a",
+        outputFingerprint: "saved-a",
+      }),
+      mockAction({
+        tool: "test",
+        normalizedArgs: { cmd: "test" },
+        inputFingerprint: fingerprintInput("test", { cmd: "test" }),
+        outputFingerprint: "two-passed",
+      }),
+      mockAction({
+        tool: "edit",
+        inputFingerprint: "edit-b",
+        outputFingerprint: "saved-b",
+      }),
+    ];
+    expect(
+      evaluateLoopRisk("test", { cmd: "test" }, actions, DEFAULT_RUNTIME_CONFIG)
+        .level,
+    ).not.toBe("block");
+  });
   describe("canonicalize and fingerprinting", () => {
     it("canonicalizes object keys in sorted order and trims strings", () => {
       const obj1 = { b: " test ", a: 1 };
       const obj2 = { a: 1, b: "test" };
-      expect(JSON.stringify(canonicalize(obj1))).toBe(JSON.stringify(canonicalize(obj2)));
+      expect(JSON.stringify(canonicalize(obj1))).toBe(
+        JSON.stringify(canonicalize(obj2)),
+      );
     });
 
     it("fingerprints input deterministically", () => {
@@ -79,7 +111,10 @@ describe("Loop Detector", () => {
 
     it("detects fuzzy repetition when Jaccard similarity >= threshold", () => {
       const actions = [
-        mockAction({ tool: "search", normalizedArgs: { query: "prisma duplicate client" } }),
+        mockAction({
+          tool: "search",
+          normalizedArgs: { query: "prisma duplicate client" },
+        }),
       ];
 
       const res = detectFuzzyRepetition(
@@ -134,8 +169,16 @@ describe("Loop Detector", () => {
   describe("output stagnation", () => {
     it("detects output stagnation across different input actions returning identical output", () => {
       const actions = [
-        mockAction({ inputFingerprint: "inp-1", outputFingerprint: "out-same", status: "completed" }),
-        mockAction({ inputFingerprint: "inp-2", outputFingerprint: "out-same", status: "completed" }),
+        mockAction({
+          inputFingerprint: "inp-1",
+          outputFingerprint: "out-same",
+          status: "completed",
+        }),
+        mockAction({
+          inputFingerprint: "inp-2",
+          outputFingerprint: "out-same",
+          status: "completed",
+        }),
       ];
 
       const res = detectOutputStagnation(actions);
@@ -145,8 +188,16 @@ describe("Loop Detector", () => {
 
     it("does not flag stagnation when outputs change", () => {
       const actions = [
-        mockAction({ inputFingerprint: "inp-1", outputFingerprint: "out-1", status: "completed" }),
-        mockAction({ inputFingerprint: "inp-2", outputFingerprint: "out-2", status: "completed" }),
+        mockAction({
+          inputFingerprint: "inp-1",
+          outputFingerprint: "out-1",
+          status: "completed",
+        }),
+        mockAction({
+          inputFingerprint: "inp-2",
+          outputFingerprint: "out-2",
+          status: "completed",
+        }),
       ];
 
       const res = detectOutputStagnation(actions);
@@ -157,26 +208,41 @@ describe("Loop Detector", () => {
   describe("risk scoring & thresholds", () => {
     it("assigns appropriate score and level: record (< 50), warn (>= 50), block (>= 70)", () => {
       // 1. Safe action
-      const safe = evaluateLoopRisk("search", { query: "unique query" }, [], DEFAULT_RUNTIME_CONFIG);
+      const safe = evaluateLoopRisk(
+        "search",
+        { query: "unique query" },
+        [],
+        DEFAULT_RUNTIME_CONFIG,
+      );
       expect(safe.score).toBe(0);
       expect(safe.level).toBe("record");
 
       // 2. Exact repeat alone (+40) -> record (< 50)
       const fp = fingerprintInput("search", { query: "prisma error" });
       const actionsWithExact = [mockAction({ inputFingerprint: fp })];
-      const exactOnly = evaluateLoopRisk("search", { query: "prisma error" }, actionsWithExact, DEFAULT_RUNTIME_CONFIG);
+      const exactOnly = evaluateLoopRisk(
+        "search",
+        { query: "prisma error" },
+        actionsWithExact,
+        DEFAULT_RUNTIME_CONFIG,
+      );
       expect(exactOnly.score).toBe(40);
       expect(exactOnly.level).toBe("record");
       expect(exactOnly.reasons).toContain("exact-repeat");
 
       // 3. Exact repeat (+40) + Cycle (+30) = 70 -> block (>= 70)
       const cycleActions = [
-        mockAction({ tool: "search", inputFingerprint: fp }),
+        mockAction({ tool: "search", inputFingerprint: fp, status: "failed" }),
         mockAction({ tool: "read" }),
-        mockAction({ tool: "search", inputFingerprint: fp }),
+        mockAction({ tool: "search", inputFingerprint: fp, status: "failed" }),
         mockAction({ tool: "read" }),
       ];
-      const blocked = evaluateLoopRisk("search", { query: "prisma error" }, cycleActions, DEFAULT_RUNTIME_CONFIG);
+      const blocked = evaluateLoopRisk(
+        "search",
+        { query: "prisma error" },
+        cycleActions,
+        DEFAULT_RUNTIME_CONFIG,
+      );
       expect(blocked.score).toBe(70);
       expect(blocked.level).toBe("block");
       expect(blocked.reasons).toContain("exact-repeat");

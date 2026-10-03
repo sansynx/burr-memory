@@ -2,7 +2,15 @@ import { join } from "node:path";
 import { appendInside, readInside, withInsideLock, writeInside } from "./fs.js";
 import type { UsageEvent, UsageSummary, Verb } from "./types.js";
 
-const VERBS: Verb[] = ["search", "hit", "miss", "capture", "resolve", "promote", "discard"];
+const VERBS: Verb[] = [
+  "search",
+  "hit",
+  "miss",
+  "capture",
+  "resolve",
+  "promote",
+  "discard",
+];
 const VERB_SET = new Set<string>(VERBS);
 
 function usagePath(root: string): string {
@@ -12,7 +20,8 @@ function usagePath(root: string): string {
 function parseLine(line: string): UsageEvent | null {
   try {
     const parsed = JSON.parse(line) as UsageEvent;
-    if (!parsed || typeof parsed.ts !== "string" || !VERB_SET.has(parsed.verb)) return null;
+    if (!parsed || typeof parsed.ts !== "string" || !VERB_SET.has(parsed.verb))
+      return null;
     return parsed;
   } catch {
     return null;
@@ -73,9 +82,17 @@ export async function appendUsage(
 
     if (hasCorrupt) {
       validEvents.push(next);
-      await writeInside(root, file, `${validEvents.map((item) => JSON.stringify(item)).join("\n")}\n`);
+      await writeInside(
+        root,
+        file,
+        `${validEvents.map((item) => JSON.stringify(item)).join("\n")}\n`,
+      );
     } else {
-      await appendInside(root, file, `${JSON.stringify(next)}\n`);
+      await appendInside(
+        root,
+        file,
+        `${raw && !raw.endsWith("\n") ? "\n" : ""}${JSON.stringify(next)}\n`,
+      );
     }
     return next;
   });

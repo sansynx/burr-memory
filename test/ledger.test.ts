@@ -1,14 +1,32 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { appendUsage, readUsage, summarizeUsage } from "../src/shared/ledger.js";
+import {
+  appendUsage,
+  readUsage,
+  summarizeUsage,
+} from "../src/shared/ledger.js";
 import { withTempDir } from "./helpers.js";
 
 describe("ledger", () => {
+  it("preserves a valid last event without its newline", async () => {
+    await withTempDir(async (dir) => {
+      const first = await appendUsage(dir, { verb: "search" });
+      await writeFile(join(dir, ".burr", "usage.jsonl"), JSON.stringify(first));
+      await appendUsage(dir, { verb: "hit" });
+      expect((await readUsage(dir)).map((event) => event.verb)).toEqual([
+        "search",
+        "hit",
+      ]);
+    });
+  });
   it("appends one JSON line per event", async () => {
     await withTempDir(async (dir) => {
       await appendUsage(dir, { verb: "search", signature: "typeerror-x" });
-      await appendUsage(dir, { verb: "hit", path: ".burr/memory/playbooks/typeerror-x.md" });
+      await appendUsage(dir, {
+        verb: "hit",
+        path: ".burr/memory/playbooks/typeerror-x.md",
+      });
       const raw = await readFile(join(dir, ".burr", "usage.jsonl"), "utf8");
       const lines = raw.trim().split("\n");
       expect(lines).toHaveLength(2);
@@ -22,7 +40,10 @@ describe("ledger", () => {
       const file = join(dir, ".burr", "usage.jsonl");
       const { mkdir } = await import("node:fs/promises");
       await mkdir(join(dir, ".burr"), { recursive: true });
-      await writeFile(file, "not-json\n{\"ts\":\"2026-08-22T04:30:00.000Z\",\"verb\":\"miss\"}\n");
+      await writeFile(
+        file,
+        'not-json\n{"ts":"2026-08-22T04:30:00.000Z","verb":"miss"}\n',
+      );
       const events = await readUsage(dir);
       expect(events).toHaveLength(1);
       expect(events[0]?.verb).toBe("miss");

@@ -1,6 +1,7 @@
 import { jaccardSimilarity } from "../runtime/loop-detector.js";
 import { tokenize } from "../shared/tokens.js";
 import type { CandidateLesson, MemoryItem } from "../shared/types.js";
+import { scopeKey } from "./validation.js";
 
 const NOISE_PATTERNS = [
   /\bat \d{1,2}:\d{2}\b/i,
@@ -52,10 +53,20 @@ export function evaluateCandidateAdmission(
   let bestSim = 0;
 
   for (const existing of existingMemories) {
-    // Only merge within matching scope level and matching or broader repository
-    const sameScope =
-      existing.scope.level === candidate.scope.level &&
-      (!candidate.scope.repository || existing.scope.repository === candidate.scope.repository);
+    const memoryType =
+      candidate.type === "playbook" || candidate.type === "tool-strategy"
+        ? candidate.type
+        : "knowledge";
+    if (existing.type !== memoryType) continue;
+    if (
+      candidate.playbook &&
+      existing.type === "playbook" &&
+      (existing.rootCause !== candidate.playbook.rootCause ||
+        existing.fix !== candidate.playbook.fix ||
+        existing.problem !== candidate.playbook.problem)
+    )
+      continue;
+    const sameScope = scopeKey(existing.scope) === scopeKey(candidate.scope);
 
     if (sameScope) {
       const existingText = existing.statement || existing.title || "";

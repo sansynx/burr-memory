@@ -1,89 +1,120 @@
-# Burr
-
 <p align="center">
-  <img src="assets/burr-mark.svg" width="112" height="112" alt="Burr mark: cream burr on ink, one ember spine">
+  <img src="assets/burr-mark.svg" width="112" height="112" alt="Burr logo">
+</p>
+<h1 align="center">Burr</h1>
+<p align="center"><strong>Local debugging memory for coding agents.</strong><br>Save a verified fix once. Find it again in your next session.</p>
+<p align="center">
+  <a href="LICENSE">MIT license</a> ·
+  <a href="https://www.npmjs.com/package/burr-memory">npm: burr-memory</a> ·
+  <a href="https://sansynx.github.io/burr-site/">Website & documentation</a> ·
+  <a href="https://github.com/sansynx/burr-memory/issues">Report a bug</a>
 </p>
 
-<p align="center">
-  <strong>Agents that remember how they got unstuck.</strong><br>
-  A burr is a seed that hooks on and rides with the next passerby.
-</p>
+Burr stores reusable failures and verified fixes on your machine. Its CLI and agent skills help you search before debugging, capture useful evidence, and save a playbook after verification. Optional host adapters record tool outcomes and interrupt repeated failures.
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-F4EEE7?style=flat&labelColor=0F0F0E" alt="MIT license"></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D18-F4EEE7?style=flat&labelColor=0F0F0E" alt="Node 18+"></a>
-  <a href="https://www.npmjs.com/package/burr-memory"><img src="https://img.shields.io/npm/v/burr-memory?style=flat&label=npm&labelColor=0F0F0E&color=FF5A1F" alt="npm version"></a>
-  <a href="https://sansynx.github.io/burr-site/"><img src="https://img.shields.io/badge/docs-website-FF5A1F?style=flat&labelColor=0F0F0E" alt="Documentation & Showcase"></a>
-  <img src="https://img.shields.io/badge/cloud-none-F4EEE7?style=flat&labelColor=0F0F0E" alt="No cloud">
-</p>
+No account, API key, hosted memory, or telemetry. Burr itself makes no network requests after installation. Your coding agent and its model provider remain separate services.
 
-> **Showcase & Interactive Documentation**: [https://sansynx.github.io/burr-site/](https://sansynx.github.io/burr-site/)
+## Quick start
+
+Requires **Node.js 22.12+**. Development and CI support Node 22, 24, and 26.
 
 ```bash
 npm install -g burr-memory
 burr global
 ```
 
-That turns Burr on for every project. Playbooks live in **`~/.burr/memory/`** on this machine, so a compacted session or an agent in another repo can reuse the same fix.
+This installs user-level skills and supported host hooks. **Review new Codex hooks in `/hooks` before using them.** Cursor and Windsurf need project installation or manual global configuration.
 
-One repo only:
+```bash
+cd your-project
+burr init
+burr search "TypeError: response.users is undefined"
+```
+
+<details>
+<summary>Install in one project instead</summary>
 
 ```bash
 npm install -D burr-memory
-npx burr init
+npm exec -- burr init
+npm exec -- burr search "your error"
 ```
 
-No account. No API key. No network after install.
+The package name is `burr-memory`; its executable is `burr`. Keep the installed package available because generated hook commands reference its runtime.
 
-Playbooks live on **this machine**, not on a server and not in one repo:
+</details>
 
+## A debugging workflow
+
+1. **Search** for a previously verified fix before guessing.
+2. **Capture** a reusable failure, including what you tried.
+3. **Verify** the fix using your project's actual checks.
+4. **Resolve** the incident into a playbook for future sessions.
+
+```bash
+burr capture --error "TypeError: response.users is undefined" --why "API response schema changed"
+# Make the fix and run the project's tests first.
+burr resolve --error "TypeError: response.users is undefined" --cause "users moved into data" --fix "Read response.data.users and validate the response" --verify "npm test: 12 passed, 0 failed"
+burr search "response users undefined"
+burr audit
 ```
-~/.burr/memory/
-  playbooks/                 verified fixes (all your projects)
-  signals/                   reusable failures
 
-your-project/
-  .burr/
-    config.json              mode: on | strict | off
-    instructions.md          always-on rule
-    usage.jsonl              search / hit / miss / capture / resolve / promote / discard
-    skills/                  owned copies of the seven commands
-```
+Burr checks verification text for evidence of success; it does not execute that command or prove your claim. Failed or command-only verification is rejected. Review retrieved advice against the current code before applying it.
 
-If you resolve a Prisma singleton bug in `shop`, the next agent in `billing` (or a compacted session in `shop`) searches `~/.burr/memory/` and rides that playbook. `burr global` writes editor rules under your home directory. Capture and resolve write the memory there too.
-
----
-
-## What is Burr?
-
-Burr is local debugging memory for coding agents. Search for a known fix, capture a reusable failure, and save a playbook after verifying the solution. Playbooks stay on your machine and can be reused across projects.
-
-The package also provides runtime APIs for recording tool actions, detecting repetition, and learning from verified sessions. A host must call these APIs and honor their results. Installing the skills alone does not automatically intercept every tool call.
-
-## Architecture
+## How it fits together
 
 ```mermaid
 flowchart LR
-    Agent["Coding agent"] --> Burr["Burr skills and CLI"]
-    Burr --> Project["Project .burr/<br/>config and usage"]
-    Burr <-->|"search and save fixes"| Memory["Shared local memory<br/>~/.burr/memory/"]
-    Agent -.->|"native host hooks"| Runtime["Runtime hooks<br/>loop checks and action ledger"]
-    Runtime -->|"verified lessons"| Memory
+    Agent["Coding agent"] --> CLI["Skills and CLI"]
+    Agent --> Host["Supported host adapter"]
+    CLI <-->|"Search / save"| Memory["Local memory<br/>~/.burr/memory/"]
+    Host --> Runtime["Tool checks and outcomes"]
+    Runtime --> Runs["Local run history"]
+    Runtime <-->|"Retrieve / learn"| Memory
+    CLI --> Project["Project .burr/<br/>config and usage"]
+    Project -.-> Runtime
 ```
 
-Skills and CLI commands handle the debugging workflow. Codex, Pi, and OpenCode adapters connect runtime tool observation; other hosts can call the exported handlers. Project settings stay in `.burr/`; shared fixes stay in your home directory. Nothing is uploaded. See the [debugging workflow](assets/burr-how-it-works.svg) for the search-to-playbook steps.
+The CLI stores Markdown signals and playbooks. The runtime stores structured JSON lessons and JSONL tool histories; verified runtime playbooks also get Markdown exports. These are separate retrieval paths. Nothing is uploaded by Burr. See [architecture and storage](ARCHITECTURE.md) and the compact [workflow diagram](assets/burr-how-it-works.svg).
 
-## Learning and retention
+## Host support
 
-- `capture` admits reusable failures and rejects common temporary environment noise.
-- `resolve` requires error, cause, fix, and verification text. The caller must run the check and report its result truthfully; Burr does not execute verification commands itself.
-- Runtime session completion accepts verification evidence from the integrating host. Admission filters candidate lessons before promotion or merging.
-- `burr memory prune` applies decay and removes expired run history. This is an explicit maintenance command, not a background scheduler. `runRetentionDays`, `archiveAfterDays`, and `maxCandidates` control pruning; candidate creation also enforces the configured cap. Defaults mark memories stale after 30 days and archive them after 60 days; run history is retained for seven days.
-- Runtime JSON memories and CLI Markdown playbooks use separate retrieval paths. The runtime dashboard reports runtime records, while `burr search` and `burr audit` cover the CLI workflow.
+| Host        | Integration                                       | Setup and limits                                                                                |
+| ----------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Codex       | Skills plus native session/tool hooks             | `burr init` or `burr global`, then `/hooks` approval. Hosted tools may not emit local hooks.    |
+| OpenCode    | Plugin instructions, commands, and tool callbacks | Project or global installation. Existing host configuration is preserved.                       |
+| Pi          | Skills plus extension callbacks                   | Install/load the Burr Pi package for runtime observation; copied skills alone are instructions. |
+| Claude Code | `/burr-*` skills                                  | Instruction workflow; no shipped automatic tool interceptor.                                    |
+| Cursor      | Project `.cursor/rules/burr.mdc`                  | `burr init`; global User Rules are configured in the editor.                                    |
+| Windsurf    | Project `.windsurf/rules/burr.md`                 | `burr init`; global rules are configured separately.                                            |
 
-## Programmatic Node API
+Installing a skill is not proof that an agent follows it. Runtime prevention requires a loaded adapter whose host honors its decision. Mode `off` disables runtime guidance for that project; `strict` also instructs the agent to search first, not universally block edits.
 
-Use the `/api` export for the Node API. The package root exports the OpenCode plugin.
+<details>
+<summary>Commands and agent skill names</summary>
+
+| CLI                                                                                          | Purpose                                           |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `burr init [dir]` / `burr global`                                                            | Install project / user integration                |
+| `burr status` / `burr on` / `burr strict` / `burr off`                                       | Inspect or change mode                            |
+| `burr search "text"`                                                                         | Search local Markdown memory                      |
+| `burr capture --error "text"`                                                                | Save a reusable failure                           |
+| `burr resolve --error "..." --cause "..." --fix "..." --verify "command and passing result"` | Save a verified playbook                          |
+| `burr promote [path]`                                                                        | Copy a legacy project playbook into shared memory |
+| `burr audit`                                                                                 | Inspect CLI usage                                 |
+| `burr stats` / `burr compare <run-a> <run-b>`                                                | Inspect runtime observations                      |
+| `burr memory summary` / `list` / `inspect <id>` / `prune`                                    | Inspect and maintain runtime memory               |
+| `burr doctor`                                                                                | Check local storage health                        |
+| `burr dashboard --port 4747`                                                                 | Open runtime metrics on loopback HTTP             |
+
+Claude Code and OpenCode use `/burr-search`, `/burr-capture`, `/burr-resolve`, `/burr-promote`, `/burr-audit`, `/burr-help`, and `/burr`. Codex exposes the corresponding `@burr-*` skills; Pi uses `/skill:burr-*`.
+
+</details>
+
+<details>
+<summary>Custom Node integration</summary>
+
+Use `burr-memory/api`, `/runtime`, `/learning`, or `/codex`. The package root exports the OpenCode plugin.
 
 ```typescript
 import { LoopDetector } from "burr-memory/api";
@@ -91,165 +122,77 @@ import { LoopDetector } from "burr-memory/api";
 const detector = new LoopDetector({ autoRecord: false });
 const args = { cmd: "npm test" };
 const check = detector.evaluateAction("run_command", args);
-
 if (check.blocked) {
   console.warn(check.reasons, check.suggestedAction);
 } else {
-  // Run the tool, then record its actual result.
-  detector.recordAction("run_command", args, "test output", "completed");
+  // Execute your tool, then record its real output and status.
+  detector.recordAction("run_command", args, "12 passed", "completed");
 }
 ```
 
-Codex uses native `SessionStart`, `PreToolUse`, `PostToolUse`, and `SessionEnd` hooks. `burr init` merges registrations into `.codex/hooks.json`; `burr global` uses `$CODEX_HOME/hooks.json` (default `~/.codex/hooks.json`). The Codex plugin bundles the same hooks. Existing unrelated hooks are preserved, and duplicate tool events from multiple sources are recorded once. Keep the installed package available: generated commands reference its built runtime.
+The `/codex` lifecycle handlers add persistence, retrieval, and reflection. A custom host must invoke them, honor blocking results, and supply truthful verification evidence. Session completion alone never proves that a fix worked. Burr does not ship an MCP server, hosted API, account system, or team authorization layer.
 
-Review new hooks in Codex `/hooks` once; Codex requires trust for each hook definition. Burr preserves that requirement and existing approval settings. Native execution and denial were tested with Codex CLI 0.146.0 using an isolated local test provider. Hosted tools such as web search do not emit these local tool hooks. See the [Codex hook protocol](https://learn.chatgpt.com/docs/hooks).
+</details>
 
-The Pi extension and OpenCode plugin also connect native tool events. Rerun `burr init` or `burr global` to upgrade an unchanged previous OpenCode adapter; edited copies are preserved. Session completion alone never promotes a fix. Custom integrations can still call the lifecycle exports from `burr-memory/codex` with explicit verification evidence.
+<details>
+<summary>Storage, retention, and privacy</summary>
 
-For a local plugin checkout, run `npm install` and `npm run build` before loading it. To repeat the native smoke test, set `BURR_CODEX_CLI` to an installed Codex `bin/codex.js`, run `npm run build`, then `npm exec -- vitest run test/codex/native.test.ts`. It uses temporary storage and a local scripted provider, not an API key or a live model.
+```text
+~/.burr/
+  memory/playbooks/        Markdown fixes
+  memory/signals/          Markdown failures
+  memory/knowledge/       Structured runtime lessons
+  memory/tool-strategies/  Structured tool strategies
+  candidates/             Lessons awaiting admission
+  archive/                Archived runtime lessons
+  runs/                   Tool histories
+  metrics/                Runtime events
 
----
+<project>/.burr/           Config, instructions, generated skills, CLI usage
+```
 
-## Install
+Memory is shared across projects on this machine, not across accounts or teams. Runtime scope filters distinguish repositories, frameworks, packages, versions, and tools. CLI Markdown search is broader; review relevance before reuse.
+
+`burr memory prune` applies decay, archives old runtime memories, and removes expired run histories. Default thresholds are 30 days to stale, 60 to archive, and seven days for runs; poor evidence can lower these thresholds. Runtime session completion and explicit pruning enforce the configured candidate count limit. CLI Markdown signals and usage logs have no automatic expiry or total storage cap.
+
+Known token, password, private-key, email, and home-path patterns are redacted before persistence. Redaction is not a guarantee that arbitrary sensitive data is detected. Do not submit source trees, `.env` contents, or customer data. Filesystem guards reject linked paths and escapes; staged replacements preserve the previous file on write failure. These safeguards do not isolate Burr from another process running as the same OS user.
+
+The dashboard binds to `127.0.0.1`, checks host/origin headers, and escapes stored text. It has no account login. `init` ignores `.burr/` in Git; review generated host files before committing them. Existing user instruction files and edited managed copies are preserved.
+
+</details>
+
+## Evidence and limits
+
+Burr provides functioning storage, retrieval, tool observation, and repeated-failure checks. The test suite exercises these behaviors with isolated homes and explicit outcomes. `test/benchmark.test.ts` is a scripted four-session regression, **not an autonomous agent benchmark or proof of time/token savings**. The dashboard reports observed events, not causal productivity gains.
+
+Loop scores are heuristics. Repeated successful work can warn; ordinary blocking requires repeated failed execution evidence. Review false positives for your tools. File-based search scans memory, and runtime summaries read histories; large stores need maintenance. `doctor` checks storage, not whether an editor actually loaded its hooks.
+
+## Development and contributing
 
 ```bash
-npm install -g burr-memory
-burr global
+npm ci
+npm run check
+npm run test:package
+npm pack --dry-run
 ```
 
-Or in one repo: `npm install -D burr-memory` then `npx burr init`.
+Use Node 22.12+ and the committed npm lockfile. The package has no production dependencies. CI checks Node 22/24/26 on Windows, macOS, and Linux. Weekly Dependabot PRs propose package and GitHub Actions updates; tests and human review precede merging.
 
-`init` and `global` write Burr's own files only (write-if-missing). They do **not** edit `AGENTS.md`, `CLAUDE.md`, or any existing foreign rule. Second run does not overwrite your edits.
+<details>
+<summary>Native hook checks and release setup</summary>
 
-From a clone of this repo:
+To run the isolated native Codex test, set `BURR_CODEX_CLI` to an installed `@openai/codex/bin/codex.js`, build, then run:
 
 ```bash
-npm install
-npm test
-npm run build
+npm exec -- vitest run test/codex/native.test.ts
 ```
 
----
+It uses temporary storage and a scripted local provider, with no API key or live model. CI pins the tested host version; the environment variable enables an explicit local compatibility check. Native Pi loader and OpenCode command-discovery checks use `BURR_PI_PACKAGE` and `BURR_OPENCODE_CLI` respectively. These tests run separately from the default suite and also have a CI job.
 
-## Commands
+The release workflow is manual and disabled by default. It also refuses private repositories. When ready to publish, configure npm trusted publishing for `release.yml`, protect the GitHub `npm` environment with required reviewers, and explicitly set `NPM_PUBLISH_ENABLED=true`. Create a `v<version>` tag matching `package.json`, then dispatch that version. No publication occurs on an ordinary push or dependency PR. Changing repository visibility is a separate owner decision.
 
-| Claude / OpenCode         | Codex           | Pi                    | What it does                                         |
-| ------------------------- | --------------- | --------------------- | ---------------------------------------------------- |
-| `/burr [on\|strict\|off]` | `@burr`         | `/skill:burr`         | Status, or set mode                                  |
-| `/burr-search`            | `@burr-search`  | `/skill:burr-search`  | Search shared memory on this machine                 |
-| `/burr-capture`           | `@burr-capture` | `/skill:burr-capture` | Save a reusable failure                              |
-| `/burr-resolve`           | `@burr-resolve` | `/skill:burr-resolve` | Write a playbook after a verified fix                |
-| `/burr-promote`           | `@burr-promote` | `/skill:burr-promote` | Lift an old project-only playbook into shared memory |
-| `/burr-audit`             | `@burr-audit`   | `/skill:burr-audit`   | Usage from `usage.jsonl`                             |
-| `/burr-help`              | `@burr-help`    | `/skill:burr-help`    | This screen                                          |
+</details>
 
-Cursor and Windsurf get the always-on rule only (no slash commands).
-
-CLI commands:
-
-```bash
-# Core debugging workflow
-burr init
-burr search "hydration mismatch"
-burr capture --error "TypeError: ..." --command "npm test"
-burr resolve --error "..." --cause "..." --fix "..." --verify "npm test (12 passed)"
-burr promote
-burr audit
-burr on | strict | off
-
-# Reliability & learning analytics
-burr stats
-burr compare <run-id-1> <run-id-2>
-burr memory summary
-burr memory list
-burr memory inspect <memory-id>
-burr memory prune
-burr doctor
-
-# Local offline visual dashboard
-burr dashboard --port 4747
-```
-
----
-
-## Hosts
-
-| Host        | Always-on                     | Commands                             | `init` writes                                |
-| ----------- | ----------------------------- | ------------------------------------ | -------------------------------------------- |
-| Claude Code | skill descriptions            | `/burr*` via `.claude/skills`        | those skill copies                           |
-| Codex       | native session and tool hooks | `@burr*` via plugin / visible skills | `.agents/skills` + `.codex/hooks.json` merge |
-| OpenCode    | plugin injects the rule       | `/burr*` via plugin                  | `.opencode/plugins/burr.mjs` + json merge    |
-| Pi          | skill descriptions            | `/skill:burr*`                       | `.pi/skills` and `.agents/skills`            |
-| Cursor      | `.cursor/rules/burr.mdc`      | none                                 | that rule file                               |
-| Windsurf    | `.windsurf/rules/burr.md`     | none                                 | that rule file                               |
-
-Canonical skills live once in `skills/`. `init` creates the host-specific
-copies and adapters each tool expects.
-
----
-
-## Validation and dashboard
-
-`test/benchmark.test.ts` exercises a scripted four-session fixture. It checks retrieval, loop handling, and memory reuse with supplied tool outputs. It is a regression test, not an independent agent benchmark or a guarantee of time or token savings.
-
-`burr dashboard --port 4747` serves runtime metrics, memories, and run summaries at `http://127.0.0.1:4747`. It binds to loopback and rejects foreign origins and host headers.
-
----
-
-## Local store
-
-Playbooks and signals are **`~/.burr/memory/`** on this machine. Shared across your projects and sessions. Not committed. Not uploaded.
-
-The project's `.burr/` is config, usage, and host copies. `init` gitignores it so leftover local files stay off the remote.
-
----
-
-## Security
-
-Debugging input is treated as untrusted.
-
-- Redact tokens, JWTs, private keys, passwords, home paths, emails, and query-string secrets before any disk write.
-- Bound sizes (12k text, 20 attempts).
-- Refuse symlink project roots during init and writes outside approved roots.
-- Never store source trees, `.env` contents, or customer data.
-- `init` never asks for a key and never calls a network.
-
----
-
-## Development
-
-```bash
-npm install
-npm test
-npm run typecheck
-npm run build
-```
-
-Layout:
-
-```
-skills/           seven canonical SKILL.md files
-templates/        config.json + always-on rule
-src/shared/       redaction, admission, search, ledger, safe fs
-src/cli/          init + global + search / capture / resolve / promote / audit
-test/hosts/       one suite per coding agent
-test/edges/       bounds, secrets, path escape
-```
-
----
-
-## Contributing
-
-Bug reports and pull requests are welcome.
-
-Burr is local debugging memory with optional runtime integration. Please do not add a remote hosted API, cloud dashboard, account system, or background telemetry process. `init` and `global` may only create Burr’s own files; they must never modify a user’s `AGENTS.md`, `CLAUDE.md`, or other existing instruction files.
-
-The mark is locked: ink `#0F0F0E`, cream `#F4EEE7`, and ember `#FF5A1F` on the spine at about 2 o’clock. No wordmark or letters.
-
-Please include tests for new behavior (`npm test`) and write a short commit message in your own name.
-
----
-
-## License
+Keep contributions local-first. Add a regression before fixing a bug, preserve user-edited configuration, and use guarded filesystem helpers. Please avoid hosted memory, telemetry, or account features. Canonical sources live in `src/`, `skills/`, and `templates/`; generated host copies, `.burr/`, `dist/`, and package tarballs do not belong in commits.
 
 [MIT](LICENSE)

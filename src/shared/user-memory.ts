@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { ensureDirectoryInside } from "./fs.js";
 import { basename, join } from "node:path";
 import { userHome } from "./home.js";
 
@@ -18,7 +18,10 @@ export function userSignalsDir(home?: string): string {
   return join(userMemoryDir(home), "signals");
 }
 
-export function userMemoryRel(kind: "playbooks" | "signals", file: string): string {
+export function userMemoryRel(
+  kind: "playbooks" | "signals",
+  file: string,
+): string {
   return `~/.burr/memory/${kind}/${basename(file)}`;
 }
 
@@ -63,14 +66,16 @@ export async function ensureUserMemory(home?: string): Promise<string> {
   }
 
   await Promise.all([
-    mkdir(userPlaybooksDir(root), { recursive: true }),
-    mkdir(userSignalsDir(root), { recursive: true }),
-    mkdir(userKnowledgeDir(root), { recursive: true }),
-    mkdir(userToolStrategiesDir(root), { recursive: true }),
-    mkdir(userCandidatesDir(root), { recursive: true }),
-    mkdir(userRunsDir(root), { recursive: true }),
-    mkdir(userArchiveDir(root), { recursive: true }),
-    mkdir(userMetricsDir(root), { recursive: true }),
+    ...[
+      userPlaybooksDir,
+      userSignalsDir,
+      userKnowledgeDir,
+      userToolStrategiesDir,
+      userCandidatesDir,
+      userRunsDir,
+      userArchiveDir,
+      userMetricsDir,
+    ].map((directory) => ensureDirectoryInside(root, directory(root))),
   ]);
   ensuredMemoryRoots.add(root);
   return root;

@@ -1,6 +1,7 @@
 export type Mode = "on" | "strict" | "off";
 
-export type Verb = "search" | "hit" | "miss" | "capture" | "resolve" | "promote" | "discard";
+export type Verb =
+  "search" | "hit" | "miss" | "capture" | "resolve" | "promote" | "discard";
 export type MemorySource = "project" | "global";
 
 export interface UsageEvent {
@@ -95,12 +96,7 @@ export interface LoopDetectionResult {
 }
 
 export type MemoryScopeLevel =
-  | "global"
-  | "ecosystem"
-  | "repository"
-  | "tool"
-  | "package"
-  | "framework";
+  "global" | "ecosystem" | "repository" | "tool" | "package" | "framework";
 
 export interface MemoryScope {
   level: MemoryScopeLevel;
@@ -112,7 +108,8 @@ export interface MemoryScope {
   tool?: string;
 }
 
-export type CandidateType = "repository-rule" | "tool-strategy" | "avoid" | "playbook";
+export type CandidateType =
+  "repository-rule" | "tool-strategy" | "avoid" | "playbook";
 
 export interface CandidateEvidence {
   sessionId: string;
@@ -126,6 +123,12 @@ export interface CandidateLesson {
   id: string;
   type: CandidateType;
   statement: string;
+  playbook?: {
+    problem: string;
+    rootCause: string;
+    fix: string;
+    verification?: { command?: string; result?: string };
+  };
   scope: MemoryScope;
   evidence: CandidateEvidence;
   confidence: number;

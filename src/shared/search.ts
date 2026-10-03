@@ -16,18 +16,37 @@ function parseFrontmatter(markdown: string): { matter: string; body: string } {
 }
 
 function excerpt(body: string): string {
-  const section = body.match(/## (?:Root Cause|Fix)\r?\n+([\s\S]*?)(?:\r?\n## |\s*$)/i);
+  const section = body.match(
+    /## (?:Root Cause|Fix)\r?\n+([\s\S]*?)(?:\r?\n## |\s*$)/i,
+  );
   const text = (section?.[1] ?? body).trim().replace(/\s+/g, " ");
   return text.slice(0, 400);
 }
 
-function score(queryTokens: Set<string>, bag: Set<string>, extra: number): number {
+function score(
+  queryTokens: Set<string>,
+  bag: Set<string>,
+  extra: number,
+): number {
   if (queryTokens.size === 0) return 0;
   let overlap = 0;
   for (const token of queryTokens) {
     if (bag.has(token)) overlap += 1;
   }
   return overlap + extra;
+}
+
+async function scoreFiles<T>(
+  files: T[],
+  visit: (file: T) => Promise<SearchHit | null>,
+): Promise<(SearchHit | null)[]> {
+  const results: (SearchHit | null)[] = [];
+  for (let offset = 0; offset < files.length; offset += 32) {
+    results.push(
+      ...(await Promise.all(files.slice(offset, offset + 32).map(visit))),
+    );
+  }
+  return results;
 }
 
 async function listMarkdown(dir: string): Promise<string[]> {
@@ -62,7 +81,8 @@ async function scoreFile(
   const bodyTokens = tokenize(body);
   const nameSet = new Set(nameTokens);
   const matterSet = new Set(matterTokens);
-  const extra = score(querySet, nameSet, 0) * 1 + score(querySet, matterSet, 0) * 0.5;
+  const extra =
+    score(querySet, nameSet, 0) * 1 + score(querySet, matterSet, 0) * 0.5;
   const allTokens = new Set(nameTokens);
   for (const t of matterTokens) allTokens.add(t);
   for (const t of bodyTokens) allTokens.add(t);
@@ -89,9 +109,11 @@ export async function searchMemoryFiles(
     join(root, ".burr", "memory", "playbooks"),
     join(root, ".burr", "memory", "signals"),
   ];
-  const projectFiles = (await Promise.all(projectDirs.map(listMarkdown))).flat();
-  const projectHitsPromise = Promise.all(
-    projectFiles.map((file) => scoreFile(root, file, querySet, relative(root, file), "project")),
+  const projectFiles = (
+    await Promise.all(projectDirs.map(listMarkdown))
+  ).flat();
+  const projectHitsPromise = scoreFiles(projectFiles, (file) =>
+    scoreFile(root, file, querySet, relative(root, file), "project"),
   );
 
   let globalHitsPromise: Promise<(SearchHit | null)[]> = Promise.resolve([]);
@@ -102,16 +124,25 @@ export async function searchMemoryFiles(
       listMarkdown(userSignalsDir(home)),
     ]).then(async ([playbooks, signals]) => {
       const globalFiles = [...playbooks, ...signals];
-      return Promise.all(
-        globalFiles.map((file) => {
-          const kind = file.replaceAll("\\", "/").includes("/signals/") ? "signals" : "playbooks";
-          return scoreFile(home, file, querySet, userMemoryRel(kind, file), "global");
-        }),
-      );
+      return scoreFiles(globalFiles, (file) => {
+        const kind = file.replaceAll("\\", "/").includes("/signals/")
+          ? "signals"
+          : "playbooks";
+        return scoreFile(
+          home,
+          file,
+          querySet,
+          userMemoryRel(kind, file),
+          "global",
+        );
+      });
     });
   }
 
-  const [projectHitsRaw, globalHitsRaw] = await Promise.all([projectHitsPromise, globalHitsPromise]);
+  const [projectHitsRaw, globalHitsRaw] = await Promise.all([
+    projectHitsPromise,
+    globalHitsPromise,
+  ]);
   const hits: SearchHit[] = [];
   for (const hit of projectHitsRaw) {
     if (hit) hits.push(hit);

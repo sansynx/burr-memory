@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -5,12 +6,19 @@ import {
   readInside,
   writeInside,
   removeInside,
+  withInsideLock,
 } from "../shared/fs.js";
 import { userHome } from "../shared/home.js";
 import { renderPlaybook } from "../shared/playbook.js";
 import { redact, redactStructured } from "../shared/redaction.js";
 import type { CandidateLesson, MemoryItem } from "../shared/types.js";
 import { evaluateCandidateAdmission } from "./admission.js";
+import {
+  scopeKey,
+  validCandidate,
+  validId,
+  validMemory,
+} from "./validation.js";
 import {
   ensureUserMemory,
   userArchiveDir,
@@ -31,11 +39,12 @@ function memoryDirForType(type: MemoryItem["type"], home: string): string {
   }
 }
 
-export async function saveCandidate(
+async function saveCandidateUnlocked(
   candidate: CandidateLesson,
   home?: string,
 ): Promise<void> {
   const resolvedHome = home ?? userHome();
+  if (!validCandidate(candidate)) throw new Error("Invalid candidate");
   await ensureUserMemory(resolvedHome);
   const dir = userCandidatesDir(resolvedHome);
   const filePath = join(dir, `${candidate.id}.json`);
@@ -48,7 +57,7 @@ export async function saveCandidate(
   );
 }
 
-export async function listCandidates(
+async function listCandidatesUnlocked(
   home?: string,
 ): Promise<CandidateLesson[]> {
   const resolvedHome = home ?? userHome();
@@ -59,27 +68,28 @@ export async function listCandidates(
     const jsonFiles = entries.filter(
       (e) => e.isFile() && e.name.endsWith(".json"),
     );
-    const results = await Promise.all(
-      jsonFiles.map(async (entry) => {
-        try {
-          const raw = await readInside(resolvedHome, join(dir, entry.name));
-          const parsed = JSON.parse(raw) as CandidateLesson;
-          return parsed && parsed.id && parsed.statement ? parsed : null;
-        } catch {
-          return null;
-        }
-      }),
-    );
+    const results = await readBatches(jsonFiles, async (entry) => {
+      try {
+        const raw = await readInside(resolvedHome, join(dir, entry.name));
+        const parsed = JSON.parse(raw) as CandidateLesson;
+        return validCandidate(parsed) && `${parsed.id}.json` === entry.name
+          ? parsed
+          : null;
+      } catch {
+        return null;
+      }
+    });
     return results.filter((c): c is CandidateLesson => c !== null);
   } catch {
     return [];
   }
 }
 
-export async function deleteCandidate(
+async function deleteCandidateUnlocked(
   candidateId: string,
   home?: string,
 ): Promise<void> {
+  if (!validId(candidateId)) throw new Error("Invalid candidate id");
   const resolvedHome = home ?? userHome();
   const dir = userCandidatesDir(resolvedHome);
   const filePath = join(dir, `${candidateId}.json`);
@@ -87,16 +97,17 @@ export async function deleteCandidate(
   try {
     assertInside(resolvedHome, filePath);
     await removeInside(resolvedHome, filePath);
-  } catch {
-    // ignore
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
 
-export async function saveMemoryItem(
+async function saveMemoryItemUnlocked(
   item: MemoryItem,
   home?: string,
 ): Promise<void> {
   const resolvedHome = home ?? userHome();
+  if (!validMemory(item)) throw new Error("Invalid memory");
   await ensureUserMemory(resolvedHome);
 
   const dir =
@@ -111,15 +122,27 @@ export async function saveMemoryItem(
     filePath,
     `${JSON.stringify(redactStructured(item), null, 2)}\n`,
   );
+  const previousDir =
+    item.status === "archived"
+      ? memoryDirForType(item.type, resolvedHome)
+      : userArchiveDir(resolvedHome);
+  await removeIfPresent(resolvedHome, join(previousDir, `${item.id}.json`));
+  if (item.status === "archived" && item.type === "playbook") {
+    await removeIfPresent(
+      resolvedHome,
+      join(userPlaybooksDir(resolvedHome), `${item.id}.md`),
+    );
+  }
 }
 
-export async function promoteCandidate(
+async function promoteCandidateUnlocked(
   candidate: CandidateLesson,
   home?: string,
 ): Promise<MemoryItem> {
   const resolvedHome = home ?? userHome();
   await ensureUserMemory(resolvedHome);
 
+  if (!validCandidate(candidate)) throw new Error("Invalid candidate");
   let memoryType: MemoryItem["type"] = "knowledge";
   if (candidate.type === "tool-strategy") {
     memoryType = "tool-strategy";
@@ -128,13 +151,24 @@ export async function promoteCandidate(
   }
 
   const id = `mem-${candidate.id.replace(/^cand-/, "")}`;
+  const prior = await getMemoryUnlocked(id, resolvedHome);
+  if (prior) return mergeCandidateUnlocked(candidate, id, resolvedHome);
   const now = new Date().toISOString();
 
-  const item: MemoryItem = {
+  const item: MemoryItem & { appliedCandidates: string[] } = {
+    appliedCandidates: [candidateReceipt(candidate)],
     id,
     title: candidate.statement.slice(0, 70),
     type: memoryType,
     statement: candidate.statement,
+    ...(candidate.playbook
+      ? {
+          problem: candidate.playbook.problem,
+          rootCause: candidate.playbook.rootCause,
+          fix: candidate.playbook.fix,
+          verification: candidate.playbook.verification,
+        }
+      : {}),
     scope: candidate.scope,
     evidence: {
       observed: candidate.evidence.observedCount || 1,
@@ -149,47 +183,38 @@ export async function promoteCandidate(
     updatedAt: now,
   };
 
-  await saveMemoryItem(item, resolvedHome);
-  await deleteCandidate(candidate.id, resolvedHome);
-
-  // If candidate is a playbook, also save standard playbook markdown
-  if (candidate.type === "playbook") {
-    const playbookFile = join(userPlaybooksDir(resolvedHome), `${id}.md`);
-    try {
-      await writeInside(
-        resolvedHome,
-        playbookFile,
-        renderPlaybook({
-          title: redact(item.title),
-          signature: id,
-          error: redact(candidate.statement),
-          rootCause: "Observed and learned by Burr",
-          fix: redact(candidate.statement),
-          verification: redact(
-            candidate.evidence.verificationCommand || "verified",
-          ),
-        }),
-      );
-    } catch {
-      // ignore
-    }
-  }
+  await saveMemoryItemUnlocked(item, resolvedHome);
+  await syncPlaybook(item, candidate, resolvedHome);
+  await deleteCandidateUnlocked(candidate.id, resolvedHome);
 
   return item;
 }
 
-export async function mergeCandidate(
+async function mergeCandidateUnlocked(
   candidate: CandidateLesson,
   targetMemoryId: string,
   home?: string,
 ): Promise<MemoryItem> {
   const resolvedHome = home ?? userHome();
-  const existing = await getMemory(targetMemoryId, resolvedHome);
+  if (!validCandidate(candidate)) throw new Error("Invalid candidate");
+  const existing = await getMemoryUnlocked(targetMemoryId, resolvedHome);
 
   if (!existing) {
-    return promoteCandidate(candidate, resolvedHome);
+    return promoteCandidateUnlocked(candidate, resolvedHome);
   }
 
+  if (scopeKey(existing.scope) !== scopeKey(candidate.scope))
+    throw new Error("Cannot merge different memory scopes");
+  const receipts =
+    (existing as MemoryItem & { appliedCandidates?: string[] })
+      .appliedCandidates ?? [];
+  const receipt = candidateReceipt(candidate);
+  if (receipts.includes(receipt)) {
+    if (existing.status !== "archived")
+      await syncPlaybook(existing, candidate, resolvedHome);
+    await deleteCandidateUnlocked(candidate.id, resolvedHome);
+    return existing;
+  }
   const now = new Date().toISOString();
   const updatedSessions = existing.evidence.sessionIds
     ? [...existing.evidence.sessionIds]
@@ -203,9 +228,22 @@ export async function mergeCandidate(
     Number((existing.confidence + 0.05).toFixed(2)),
   );
 
-  const updated: MemoryItem = {
+  const updated: MemoryItem & { appliedCandidates: string[] } = {
     ...existing,
-    statement: `${existing.statement} | ${candidate.statement}`,
+    ...(candidate.playbook
+      ? {
+          problem: candidate.playbook.problem,
+          rootCause: candidate.playbook.rootCause,
+          fix: candidate.playbook.fix,
+          verification: candidate.playbook.verification,
+        }
+      : {}),
+    status: "active",
+    appliedCandidates: [...receipts, receipt],
+    statement:
+      (existing.statement || existing.title) === candidate.statement
+        ? candidate.statement
+        : `${existing.statement || existing.title} | ${candidate.statement}`,
     evidence: {
       ...existing.evidence,
       observed:
@@ -217,15 +255,22 @@ export async function mergeCandidate(
     updatedAt: now,
   };
 
-  await saveMemoryItem(updated, resolvedHome);
-  await deleteCandidate(candidate.id, resolvedHome);
+  await saveMemoryItemUnlocked(updated, resolvedHome);
+  if (existing.status === "archived")
+    await removeIfPresent(
+      resolvedHome,
+      join(userArchiveDir(resolvedHome), `${existing.id}.json`),
+    );
+  await syncPlaybook(updated, candidate, resolvedHome);
+  await deleteCandidateUnlocked(candidate.id, resolvedHome);
   return updated;
 }
 
-export async function getMemory(
+async function getMemoryUnlocked(
   id: string,
   home?: string,
 ): Promise<MemoryItem | null> {
+  if (!validId(id)) return null;
   const resolvedHome = home ?? userHome();
   const dirs = [
     userKnowledgeDir(resolvedHome),
@@ -237,7 +282,8 @@ export async function getMemory(
     const filePath = join(dir, `${id}.json`);
     try {
       const raw = await readInside(resolvedHome, filePath);
-      return JSON.parse(raw) as MemoryItem;
+      const item: unknown = JSON.parse(raw);
+      if (validMemory(item) && item.id === id) return item;
     } catch {
       // try next
     }
@@ -246,7 +292,7 @@ export async function getMemory(
   return null;
 }
 
-export async function listAllMemories(home?: string): Promise<MemoryItem[]> {
+async function listAllMemoriesUnlocked(home?: string): Promise<MemoryItem[]> {
   const resolvedHome = home ?? userHome();
   await ensureUserMemory(resolvedHome);
 
@@ -256,41 +302,44 @@ export async function listAllMemories(home?: string): Promise<MemoryItem[]> {
     userArchiveDir(resolvedHome),
   ];
 
-  const dirResults = await Promise.all(
-    dirs.map(async (dir) => {
-      try {
-        const entries = await readdir(dir, { withFileTypes: true });
-        const jsonFiles = entries.filter(
-          (e) => e.isFile() && e.name.endsWith(".json"),
-        );
-        const parsed = await Promise.all(
-          jsonFiles.map(async (entry) => {
+  const dirResults = [];
+  for (const dir of dirs) {
+    dirResults.push(
+      await (async () => {
+        try {
+          const entries = await readdir(dir, { withFileTypes: true });
+          const jsonFiles = entries.filter(
+            (e) => e.isFile() && e.name.endsWith(".json"),
+          );
+          const parsed = await readBatches(jsonFiles, async (entry) => {
             try {
               const raw = await readInside(resolvedHome, join(dir, entry.name));
               const item = JSON.parse(raw) as MemoryItem;
-              return item && item.id ? item : null;
+              return validMemory(item) && `${item.id}.json` === entry.name
+                ? item
+                : null;
             } catch {
               return null;
             }
-          }),
-        );
-        return parsed.filter((m): m is MemoryItem => m !== null);
-      } catch {
-        return [];
-      }
-    }),
-  );
+          });
+          return parsed.filter((m): m is MemoryItem => m !== null);
+        } catch {
+          return [];
+        }
+      })(),
+    );
+  }
 
   return dirResults.flat();
 }
 
-export async function recordMemoryReuse(
+async function recordMemoryReuseUnlocked(
   memoryId: string,
   success: boolean,
   home?: string,
 ): Promise<MemoryItem | null> {
   const resolvedHome = home ?? userHome();
-  const existing = await getMemory(memoryId, resolvedHome);
+  const existing = await getMemoryUnlocked(memoryId, resolvedHome);
   if (!existing) return null;
 
   const now = new Date().toISOString();
@@ -320,7 +369,7 @@ export async function recordMemoryReuse(
     updatedAt: now,
   };
 
-  await saveMemoryItem(updated, resolvedHome);
+  await saveMemoryItemUnlocked(updated, resolvedHome);
   return updated;
 }
 
@@ -343,12 +392,14 @@ export function calculateMemoryScore(
   return Math.max(0, Number((base - penalty).toFixed(2)));
 }
 
-export async function applyMemoryDecayAndPruning(
+async function applyMemoryDecayAndPruningUnlocked(
   home?: string,
   archiveDays = 60,
 ): Promise<{ staled: number; archived: number; pruned: number }> {
   const resolvedHome = home ?? userHome();
-  const memories = await listAllMemories(resolvedHome);
+  if (!Number.isFinite(archiveDays) || archiveDays <= 0)
+    throw new Error("Invalid archive age");
+  const memories = await listAllMemoriesUnlocked(resolvedHome);
   const now = Date.now();
 
   let staled = 0;
@@ -372,8 +423,13 @@ export async function applyMemoryDecayAndPruning(
         assertInside(memoryDirForType(item.type, resolvedHome), oldFile);
         item.status = "archived";
         item.updatedAt = new Date().toISOString();
-        await saveMemoryItem(item, resolvedHome);
-        await removeInside(resolvedHome, oldFile);
+        await saveMemoryItemUnlocked(item, resolvedHome);
+        await removeIfPresent(resolvedHome, oldFile);
+        if (item.type === "playbook")
+          await removeIfPresent(
+            resolvedHome,
+            join(userPlaybooksDir(resolvedHome), `${item.id}.md`),
+          );
         archived += 1;
       } else if (
         item.status === "active" &&
@@ -381,10 +437,15 @@ export async function applyMemoryDecayAndPruning(
       ) {
         item.status = "stale";
         item.updatedAt = new Date().toISOString();
-        await saveMemoryItem(item, resolvedHome);
+        await saveMemoryItemUnlocked(item, resolvedHome);
         staled += 1;
       }
     } else if (item.status === "archived") {
+      if (item.type === "playbook")
+        await removeIfPresent(
+          resolvedHome,
+          join(userPlaybooksDir(resolvedHome), `${item.id}.md`),
+        );
       // If archived and extremely old with low score and no recent reuse, eligible for deletion
       if (daysSinceUsed > archiveDays * 2 && score < 1) {
         const archiveFile = join(
@@ -405,12 +466,12 @@ export async function applyMemoryDecayAndPruning(
   return { staled, archived, pruned };
 }
 
-export async function consolidateMemories(
+async function consolidateMemoriesUnlocked(
   home?: string,
 ): Promise<{ promoted: number; merged: number; discarded: number }> {
   const resolvedHome = home ?? userHome();
-  const candidates = await listCandidates(resolvedHome);
-  const existing = await listAllMemories(resolvedHome);
+  const candidates = await listCandidatesUnlocked(resolvedHome);
+  const existing = await listAllMemoriesUnlocked(resolvedHome);
 
   let promoted = 0;
   let merged = 0;
@@ -419,14 +480,20 @@ export async function consolidateMemories(
   for (const candidate of candidates) {
     const decision = evaluateCandidateAdmission(candidate, existing);
     if (decision.decision === "promote") {
-      const item = await promoteCandidate(candidate, resolvedHome);
+      const item = await promoteCandidateUnlocked(candidate, resolvedHome);
       existing.push(item);
       promoted += 1;
     } else if (decision.decision === "merge" && decision.targetMemoryId) {
-      await mergeCandidate(candidate, decision.targetMemoryId, resolvedHome);
+      const item = await mergeCandidateUnlocked(
+        candidate,
+        decision.targetMemoryId,
+        resolvedHome,
+      );
+      const index = existing.findIndex((memory) => memory.id === item.id);
+      if (index !== -1) existing[index] = item;
       merged += 1;
     } else {
-      await deleteCandidate(candidate.id, resolvedHome);
+      await deleteCandidateUnlocked(candidate.id, resolvedHome);
       discarded += 1;
     }
   }
@@ -434,18 +501,142 @@ export async function consolidateMemories(
   return { promoted, merged, discarded };
 }
 
-export async function trimCandidates(
+async function trimCandidatesUnlocked(
   home?: string,
   maxCandidates = 100,
 ): Promise<number> {
   if (!Number.isInteger(maxCandidates) || maxCandidates < 1)
     throw new Error("Invalid candidate limit");
-  const candidates = await listCandidates(home);
+  const candidates = await listCandidatesUnlocked(home);
   candidates.sort(
     (a, b) =>
       b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
   );
   const expired = candidates.slice(maxCandidates);
-  for (const candidate of expired) await deleteCandidate(candidate.id, home);
+  for (const candidate of expired)
+    await deleteCandidateUnlocked(candidate.id, home);
   return expired.length;
+}
+
+function candidateReceipt(candidate: CandidateLesson): string {
+  return createHash("sha256")
+    .update(JSON.stringify([candidate.id, candidate.evidence.sessionId]))
+    .digest("hex");
+}
+
+async function syncPlaybook(
+  item: MemoryItem,
+  candidate: CandidateLesson,
+  home: string,
+): Promise<void> {
+  if (item.type !== "playbook") return;
+  await writeInside(
+    home,
+    join(userPlaybooksDir(home), `${item.id}.md`),
+    renderPlaybook({
+      title: redact(item.title),
+      signature: item.id,
+      error: redact(item.problem || item.statement || item.title),
+      rootCause: redact(item.rootCause || "Observed and learned by Burr"),
+      fix: redact(item.fix || item.statement || item.title),
+      verification: redact(
+        [
+          item.verification?.command || candidate.evidence.verificationCommand,
+          item.verification?.result,
+        ]
+          .filter(Boolean)
+          .join("\n") || "verified",
+      ),
+    }),
+  );
+}
+
+async function removeIfPresent(home: string, path: string): Promise<void> {
+  try {
+    await removeInside(home, path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+async function withLearningLock<T>(
+  home: string | undefined,
+  action: (root: string) => Promise<T>,
+): Promise<T> {
+  const root = home ?? userHome();
+  await ensureUserMemory(root);
+  return withInsideLock(root, join(root, ".burr", "learning.lock"), () =>
+    action(root),
+  );
+}
+
+export const saveCandidate = (
+  candidate: CandidateLesson,
+  home?: string,
+): Promise<void> =>
+  withLearningLock(home, (root) => saveCandidateUnlocked(candidate, root));
+export const deleteCandidate = (id: string, home?: string): Promise<void> =>
+  withLearningLock(home, (root) => deleteCandidateUnlocked(id, root));
+export const saveMemoryItem = (
+  item: MemoryItem,
+  home?: string,
+): Promise<void> =>
+  withLearningLock(home, (root) => saveMemoryItemUnlocked(item, root));
+export const promoteCandidate = (
+  candidate: CandidateLesson,
+  home?: string,
+): Promise<MemoryItem> =>
+  withLearningLock(home, (root) => promoteCandidateUnlocked(candidate, root));
+export const mergeCandidate = (
+  candidate: CandidateLesson,
+  id: string,
+  home?: string,
+): Promise<MemoryItem> =>
+  withLearningLock(home, (root) => mergeCandidateUnlocked(candidate, id, root));
+export const recordMemoryReuse = (
+  id: string,
+  success: boolean,
+  home?: string,
+): Promise<MemoryItem | null> =>
+  withLearningLock(home, (root) =>
+    recordMemoryReuseUnlocked(id, success, root),
+  );
+export const applyMemoryDecayAndPruning = (
+  home?: string,
+  archiveDays = 60,
+): Promise<{ staled: number; archived: number; pruned: number }> =>
+  withLearningLock(home, (root) =>
+    applyMemoryDecayAndPruningUnlocked(root, archiveDays),
+  );
+export const consolidateMemories = (
+  home?: string,
+): Promise<{ promoted: number; merged: number; discarded: number }> =>
+  withLearningLock(home, (root) => consolidateMemoriesUnlocked(root));
+export const trimCandidates = (
+  home?: string,
+  maxCandidates = 100,
+): Promise<number> =>
+  withLearningLock(home, (root) => trimCandidatesUnlocked(root, maxCandidates));
+
+export const listCandidates = (home?: string): Promise<CandidateLesson[]> =>
+  withLearningLock(home, (root) => listCandidatesUnlocked(root));
+export const listAllMemories = (home?: string): Promise<MemoryItem[]> =>
+  withLearningLock(home, (root) => listAllMemoriesUnlocked(root));
+export const getMemory = (
+  id: string,
+  home?: string,
+): Promise<MemoryItem | null> =>
+  withLearningLock(home, (root) => getMemoryUnlocked(id, root));
+
+async function readBatches<T, R>(
+  items: T[],
+  read: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let offset = 0; offset < items.length; offset += 32) {
+    results.push(
+      ...(await Promise.all(items.slice(offset, offset + 32).map(read))),
+    );
+  }
+  return results;
 }

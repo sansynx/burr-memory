@@ -48,7 +48,7 @@ if (check.blocked) {
 }
 ```
 
-The root import is the OpenCode plugin. `/codex` exports lifecycle functions for custom integration; `init` does not automatically register them. Integrations must call the functions and honor blocking decisions. Defaults warn at 50 and block at 70; scores are heuristics, not proof that an action is wrong.
+The root import is the OpenCode plugin. `init` and `global` register native Codex hooks; review their definitions in Codex `/hooks` before use. `/codex` also exports lifecycle functions for custom integrations, which must call them and honor blocking decisions. Defaults warn at 50 and permit blocking at 70 when repeated failure evidence exists; scores are heuristics, not proof that an action is wrong.
 
 ## Maintenance and diagnostics
 

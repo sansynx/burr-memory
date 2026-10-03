@@ -30,6 +30,13 @@ export const HARNESS_CAPABILITIES: Record<string, BurrHarnessCapabilities> = {
     blocking: false,
     contextInjection: true,
   },
+  windsurf: {
+    name: "Windsurf",
+    beforeToolObservation: false,
+    afterToolObservation: false,
+    blocking: false,
+    contextInjection: true,
+  },
   pi: {
     name: "Pi",
     beforeToolObservation: true,

@@ -1,7 +1,7 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { admitResolution, admitSignal } from "./admission.js";
-import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, TEXT_LIMIT, clip } from "./bounds.js";
+import { ATTEMPT_COUNT, ATTEMPT_LIMIT, SHORT_LIMIT, clip } from "./bounds.js";
 import { ensureStore } from "./ensure-store.js";
 import { BurrFsError, readInside, writeIfMissing, writeInside } from "./fs.js";
 import { userHome } from "./home.js";
@@ -17,8 +17,12 @@ import { redact } from "./redaction.js";
 import { searchMemoryFiles } from "./search.js";
 import type { CaptureInput, Mode, ResolveInput, SearchHit } from "./types.js";
 
-function boundList(items: string[] | undefined, count: number, limit: number): string[] {
-  return (items ?? []).slice(0, count).map((item) => clip(item, limit));
+function boundList(
+  items: string[] | undefined,
+  count: number,
+  limit: number,
+): string[] {
+  return (items ?? []).slice(0, count).map((item) => clip(redact(item), limit));
 }
 
 function titleFrom(error: string, fallback: string): string {
@@ -29,7 +33,9 @@ function titleFrom(error: string, fallback: string): string {
 }
 
 function redactShort(value: unknown): string | undefined {
-  return typeof value === "string" ? clip(redact(value), SHORT_LIMIT) : undefined;
+  return typeof value === "string"
+    ? clip(redact(value), SHORT_LIMIT)
+    : undefined;
 }
 
 export async function captureSignal(
@@ -39,14 +45,22 @@ export async function captureSignal(
 ): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
   const bounded: CaptureInput = {
     ...input,
-    error: clip(input.error ?? "", TEXT_LIMIT),
-    stack: input.stack ? clip(input.stack, TEXT_LIMIT) : undefined,
-    command: input.command ? clip(input.command, SHORT_LIMIT) : undefined,
+    error: redact(input.error ?? ""),
+    stack: input.stack ? redact(input.stack) : undefined,
+    command: input.command
+      ? clip(redact(input.command), SHORT_LIMIT)
+      : undefined,
     exitCode:
-      input.exitCode === undefined ? undefined : clip(redact(String(input.exitCode)), SHORT_LIMIT),
-    attemptedFixes: boundList(input.attemptedFixes, ATTEMPT_COUNT, ATTEMPT_LIMIT),
-    whyKeep: input.whyKeep ? clip(input.whyKeep, TEXT_LIMIT) : undefined,
-    rootCause: input.rootCause ? clip(input.rootCause, TEXT_LIMIT) : undefined,
+      input.exitCode === undefined
+        ? undefined
+        : clip(redact(String(input.exitCode)), SHORT_LIMIT),
+    attemptedFixes: boundList(
+      input.attemptedFixes,
+      ATTEMPT_COUNT,
+      ATTEMPT_LIMIT,
+    ),
+    whyKeep: input.whyKeep ? redact(input.whyKeep) : undefined,
+    rootCause: input.rootCause ? redact(input.rootCause) : undefined,
   };
   const home = options.home ?? userHome();
   await ensureStore(root);
@@ -58,7 +72,11 @@ export async function captureSignal(
   const sig = signature(bounded.error);
   const admission = admitSignal(bounded);
   if (!admission.ok) {
-    await appendUsage(root, { verb: "discard", reason: admission.reason, signature: sig });
+    await appendUsage(root, {
+      verb: "discard",
+      reason: admission.reason,
+      signature: sig,
+    });
     return { ok: false, reason: admission.reason ?? "discard" };
   }
 
@@ -89,11 +107,15 @@ export async function resolvePlaybook(
 ): Promise<{ ok: true; path: string } | { ok: false; reason: string }> {
   const bounded: ResolveInput = {
     ...input,
-    error: clip(input.error ?? "", TEXT_LIMIT),
-    rootCause: clip(input.rootCause ?? "", TEXT_LIMIT),
-    fix: clip(input.fix ?? "", TEXT_LIMIT),
-    verification: clip(input.verification ?? "", TEXT_LIMIT),
-    failedAttempts: boundList(input.failedAttempts, ATTEMPT_COUNT, ATTEMPT_LIMIT),
+    error: redact(input.error ?? ""),
+    rootCause: redact(input.rootCause ?? ""),
+    fix: redact(input.fix ?? ""),
+    verification: redact(input.verification ?? ""),
+    failedAttempts: boundList(
+      input.failedAttempts,
+      ATTEMPT_COUNT,
+      ATTEMPT_LIMIT,
+    ),
     context: input.context
       ? {
           language: redactShort(input.context.language),
@@ -106,14 +128,22 @@ export async function resolvePlaybook(
   const home = options.home ?? userHome();
   await ensureStore(root);
   await ensureUserMemory(home);
-  if (!bounded.error.trim() || !bounded.rootCause.trim() || !bounded.fix.trim()) {
+  if (
+    !bounded.error.trim() ||
+    !bounded.rootCause.trim() ||
+    !bounded.fix.trim()
+  ) {
     await appendUsage(root, { verb: "discard", reason: "empty-error" });
     return { ok: false, reason: "empty-error" };
   }
   const sig = signature(`${bounded.error}\n${bounded.rootCause}`);
   const admission = admitResolution(bounded);
   if (!admission.ok) {
-    await appendUsage(root, { verb: "discard", reason: admission.reason, signature: sig });
+    await appendUsage(root, {
+      verb: "discard",
+      reason: admission.reason,
+      signature: sig,
+    });
     return { ok: false, reason: admission.reason ?? "discard" };
   }
 
@@ -142,13 +172,19 @@ export async function runSearch(
   query: string,
   options: { home?: string } = {},
 ): Promise<{ hits: SearchHit[] }> {
-  const cleaned = redact(clip(query, TEXT_LIMIT));
+  const cleaned = redact(query);
   const sig = signature(cleaned);
   await ensureStore(root);
   await appendUsage(root, { verb: "search", signature: sig });
-  const hits = await searchMemoryFiles(root, cleaned, { home: options.home ?? userHome() });
+  const hits = await searchMemoryFiles(root, cleaned, {
+    home: options.home ?? userHome(),
+  });
   if (hits[0]) {
-    await appendUsage(root, { verb: "hit", signature: sig, path: hits[0].path.replaceAll("\\", "/") });
+    await appendUsage(root, {
+      verb: "hit",
+      signature: sig,
+      path: hits[0].path.replaceAll("\\", "/"),
+    });
   } else {
     await appendUsage(root, { verb: "miss", signature: sig });
   }
@@ -160,7 +196,11 @@ function playbookRel(path: string): string {
 }
 
 function isProjectPlaybook(rel: string): boolean {
-  return rel.startsWith(".burr/memory/playbooks/") && rel.endsWith(".md") && !rel.includes("..");
+  return (
+    rel.startsWith(".burr/memory/playbooks/") &&
+    rel.endsWith(".md") &&
+    !rel.includes("..")
+  );
 }
 
 async function writePromotedPlaybook(
@@ -168,21 +208,29 @@ async function writePromotedPlaybook(
   preferredFilename: string,
   markdown: string,
 ): Promise<string> {
-  const target = (filename: string) => join(home, ".burr", "memory", "playbooks", filename);
+  const target = (filename: string) =>
+    join(home, ".burr", "memory", "playbooks", filename);
   const write = async (filename: string) => {
     const result = await writeIfMissing(home, target(filename), markdown);
     if (result === "created") return true;
-    return (await readInside(home, target(filename)).catch(() => "")) === markdown;
+    return (
+      (await readInside(home, target(filename)).catch(() => "")) === markdown
+    );
   };
 
   if (await write(preferredFilename)) return preferredFilename;
 
   const contentHash = signature(markdown).slice(-8);
-  const stem = preferredFilename.replace(/\.md$/i, "").slice(0, 70).replace(/-+$/, "");
+  const stem = preferredFilename
+    .replace(/\.md$/i, "")
+    .slice(0, 70)
+    .replace(/-+$/, "");
   const collisionFilename = `${stem || "playbook"}-${contentHash}.md`;
   if (await write(collisionFilename)) return collisionFilename;
 
-  throw new Error(`Unable to promote playbook without overwriting ${collisionFilename}`);
+  throw new Error(
+    `Unable to promote playbook without overwriting ${collisionFilename}`,
+  );
 }
 
 async function newestLegacyPlaybook(root: string): Promise<string | undefined> {
@@ -211,12 +259,19 @@ async function newestLegacyPlaybook(root: string): Promise<string | undefined> {
     : undefined;
 }
 
-async function legacyPlaybookExists(root: string, rel: string): Promise<boolean> {
+async function legacyPlaybookExists(
+  root: string,
+  rel: string,
+): Promise<boolean> {
   try {
     await readInside(root, join(root, rel));
     return true;
   } catch (error) {
-    if (error instanceof BurrFsError || (error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if (
+      error instanceof BurrFsError ||
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    )
+      return false;
     throw error;
   }
 }
@@ -242,10 +297,13 @@ export async function promotePlaybook(
     rel =
       ledgerRel && (await legacyPlaybookExists(root, ledgerRel))
         ? ledgerRel
-        : (await newestLegacyPlaybook(root)) ?? "";
+        : ((await newestLegacyPlaybook(root)) ?? "");
   }
   if (!rel || !isProjectPlaybook(rel)) {
-    await appendUsage(root, { verb: "discard", reason: rel ? "not-a-playbook" : "missing-playbook" });
+    await appendUsage(root, {
+      verb: "discard",
+      reason: rel ? "not-a-playbook" : "missing-playbook",
+    });
     return { ok: false, reason: rel ? "not-a-playbook" : "missing-playbook" };
   }
 
@@ -289,8 +347,14 @@ export async function setMode(root: string, mode: Mode): Promise<void> {
   try {
     const parsed = JSON.parse(await readInside(root, dest)) as unknown;
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+      for (const [key, value] of Object.entries(
+        parsed as Record<string, unknown>,
+      )) {
+        if (
+          key !== "__proto__" &&
+          key !== "constructor" &&
+          key !== "prototype"
+        ) {
           config[key] = value;
         }
       }
@@ -304,10 +368,17 @@ export async function setMode(root: string, mode: Mode): Promise<void> {
 
 export async function readMode(root: string): Promise<Mode> {
   try {
-    const config = JSON.parse(await readInside(root, join(root, ".burr", "config.json"))) as {
+    const config = JSON.parse(
+      await readInside(root, join(root, ".burr", "config.json")),
+    ) as {
       mode?: string;
     };
-    if (config && (config.mode === "on" || config.mode === "strict" || config.mode === "off")) {
+    if (
+      config &&
+      (config.mode === "on" ||
+        config.mode === "strict" ||
+        config.mode === "off")
+    ) {
       return config.mode;
     }
   } catch {
@@ -329,7 +400,14 @@ export async function status(root: string): Promise<{
       return 0;
     }
   };
-  const [mode, summary, userPlaybooks, projPlaybooks, userSignals, projSignals] = await Promise.all([
+  const [
+    mode,
+    summary,
+    userPlaybooks,
+    projPlaybooks,
+    userSignals,
+    projSignals,
+  ] = await Promise.all([
     readMode(root),
     summarizeUsage(root),
     count(userPlaybooksDir()),

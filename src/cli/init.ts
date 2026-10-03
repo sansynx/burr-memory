@@ -10,7 +10,10 @@ import {
   writeInside,
 } from "../shared/fs.js";
 import { ensureBurrGitignore } from "../shared/gitignore.js";
-import { mergeOpenCodePlugin } from "../shared/opencode.js";
+import {
+  isLegacyOpenCodePlugin,
+  mergeOpenCodePlugin,
+} from "../shared/opencode.js";
 import { findPackageRoot } from "../shared/package-root.js";
 
 const SKILLS = [
@@ -73,7 +76,8 @@ export async function runInit(
         createHash("sha256")
           .update(existing.replace(/\r\n/g, "\n"))
           .digest("hex") ===
-        "a5c7bb380666b9f1442b1c5b2aa631b1b05d38c7bfdc7b6f814464e90a2a8082"
+          "a5c7bb380666b9f1442b1c5b2aa631b1b05d38c7bfdc7b6f814464e90a2a8082" ||
+        isLegacyOpenCodePlugin(existing)
       ) {
         await writeInside(root, join(root, rel), data);
         note(rel, "created");
@@ -132,11 +136,15 @@ export async function runInit(
   await write(".cursor/rules/burr.mdc", `${CURSOR_FRONTMATTER}${instructions}`);
   await write(
     ".windsurf/rules/burr.md",
-    instructions.endsWith("\n") ? instructions : `${instructions}\n`,
+    `---\ntrigger: always_on\n---\n\n${instructions.trimEnd()}\n`,
   );
 
   for (const file of ["opencode.json", ".opencode/opencode.json"]) {
-    const result = await mergeOpenCodePlugin(root, file, PLUGIN_PATH);
+    const result = await mergeOpenCodePlugin(
+      root,
+      file,
+      file === "opencode.json" ? PLUGIN_PATH : "./plugins/burr.mjs",
+    );
     await note(file, result);
   }
 

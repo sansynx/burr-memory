@@ -12,11 +12,18 @@ export const SKILL_NAMES = [
   "burr-help",
 ] as const;
 
-export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+export async function withTempDir<T>(
+  fn: (dir: string) => Promise<T>,
+): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "burr-"));
   try {
     return await fn(dir);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await rm(dir, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
   }
 }

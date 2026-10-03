@@ -114,7 +114,8 @@ describe("OpenAI Codex Runtime Hooks", () => {
           sessionId,
           tool: "search",
           args: { query: "prisma client bug" },
-          output: "0 results",
+          output: "search failed",
+          error: "search failed",
         },
         { home },
       );
@@ -131,7 +132,8 @@ describe("OpenAI Codex Runtime Hooks", () => {
           sessionId,
           tool: "search",
           args: { query: "prisma client bug" },
-          output: "0 results",
+          output: "search failed",
+          error: "search failed",
         },
         { home },
       );
@@ -151,7 +153,8 @@ describe("OpenAI Codex Runtime Hooks", () => {
           sessionId,
           tool: "search",
           args: { query: "prisma client bug" },
-          output: "0 results",
+          output: "search failed",
+          error: "search failed",
         },
         { home },
       );

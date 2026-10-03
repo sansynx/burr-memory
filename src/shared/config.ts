@@ -166,10 +166,20 @@ export async function saveConfig(
   const toWrite = {
     ...existingRaw,
     mode: merged.mode,
-    runtime: merged.runtime,
-    memory: merged.memory,
+    runtime: {
+      ...(isRecord(existingRaw.runtime) ? existingRaw.runtime : {}),
+      ...merged.runtime,
+    },
+    memory: {
+      ...(isRecord(existingRaw.memory) ? existingRaw.memory : {}),
+      ...merged.memory,
+    },
   };
 
   await writeInside(root, dest, `${JSON.stringify(toWrite, null, 2)}\n`);
   return merged;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

@@ -89,7 +89,7 @@ export async function computeBurrStats(home?: string): Promise<BurrStats> {
   for (const m of memories) {
     if (m.status === "archived") {
       archivedCount += 1;
-    } else {
+    } else if (m.status === "active") {
       activeCount += 1;
     }
     successfulReuseCount += m.evidence.successfulReuse;

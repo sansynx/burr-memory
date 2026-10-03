@@ -53,13 +53,32 @@ describe("admitSignal", () => {
 
   it("keeps a library misuse / wrong config pattern", () => {
     const result = admitSignal({
-      error: "ZodError: Required at email — schema validation failed for the login payload",
+      error:
+        "ZodError: Required at email — schema validation failed for the login payload",
     });
     expect(result.ok).toBe(true);
   });
 });
 
 describe("admitResolution", () => {
+  it.each([
+    "npm test failed with 2 failures",
+    "npm test",
+    "0 passed, 3 failed",
+    "14 passed, 1 failed",
+    "tests did not pass",
+    "benchmark will run later",
+    "exit code 01",
+  ])("rejects unsuccessful or missing outcomes: %s", (verification) => {
+    expect(
+      admitResolution({
+        error: "TypeError: synthetic",
+        rootCause: "missing guard",
+        fix: "add guard",
+        verification,
+      }).ok,
+    ).toBe(false);
+  });
   it("refuses 'I think it's fixed' without evidence", () => {
     const result = admitResolution({
       error: "TypeError: x is undefined",
@@ -86,7 +105,8 @@ describe("admitResolution", () => {
       error: "Hydration mismatch on the settings page",
       rootCause: "server rendered ISO date, client used local timezone",
       fix: "format dates in UTC on both sides",
-      verification: "reproduced the mismatch, then it was gone after the UTC change",
+      verification:
+        "reproduced the mismatch, then it was gone after the UTC change",
     });
     expect(result.ok).toBe(true);
   });

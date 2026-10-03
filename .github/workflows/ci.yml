@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [18, 22]
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -35,6 +35,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm pack --dry-run
+      - run: npm run test:package
+      - run: npm audit --audit-level=moderate
 
   codex-hooks:
     name: Native Codex hooks / Windows
@@ -51,7 +53,28 @@ jobs:
         shell: pwsh
         run: |
           $codexTestDirectory = Join-Path $env:RUNNER_TEMP 'burr-codex-test'
-          npm install --prefix $codexTestDirectory --no-save --package-lock=false @openai/codex@0.146.0
+          npm install --prefix $codexTestDirectory --no-save --package-lock=false @openai/codex@0.160.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "BURR_CODEX_CLI=$codexTestDirectory/node_modules/@openai/codex/bin/codex.js" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - run: npm exec -- vitest run test/codex/native.test.ts
+
+  host-adapters:
+    name: Native Pi and OpenCode adapters / Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install isolated host test packages
+        shell: pwsh
+        run: |
+          $hostTestDirectory = Join-Path $env:RUNNER_TEMP 'burr-host-tests'
+          npm install --prefix $hostTestDirectory --no-save --package-lock=false @earendil-works/pi-coding-agent@1.0.0 opencode-ai@1.18.34
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "BURR_PI_PACKAGE=$hostTestDirectory/node_modules/@earendil-works/pi-coding-agent" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BURR_OPENCODE_CLI=$hostTestDirectory/node_modules/opencode-ai/bin/opencode.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - run: npm exec -- vitest run test/hosts/pi-native.test.ts test/hosts/opencode-native.test.ts

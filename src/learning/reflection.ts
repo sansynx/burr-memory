@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { getSessionActions } from "../runtime/action-ledger.js";
 import { clip } from "../shared/bounds.js";
 import { redact } from "../shared/redaction.js";
-import type { CandidateLesson, CandidateType, MemoryScope } from "../shared/types.js";
+import type {
+  CandidateLesson,
+  CandidateType,
+  MemoryScope,
+} from "../shared/types.js";
+import { scopeKey } from "./validation.js";
 
 export interface ReflectionInput {
   sessionId: string;
@@ -27,15 +32,21 @@ export interface ReflectionResult {
   candidates: CandidateLesson[];
 }
 
-function candidateId(type: CandidateType, statement: string, scope: MemoryScope): string {
+function candidateId(
+  type: CandidateType,
+  statement: string,
+  scope: MemoryScope,
+): string {
   const hash = createHash("sha256")
-    .update(`${type}:${scope.repository || scope.level}:${statement.trim().toLowerCase()}`)
+    .update(`${type}:${scopeKey(scope)}:${statement.trim().toLowerCase()}`)
     .digest("hex")
     .slice(0, 16);
   return `cand-${hash}`;
 }
 
-export async function reflectOnSession(input: ReflectionInput): Promise<ReflectionResult> {
+export async function reflectOnSession(
+  input: ReflectionInput,
+): Promise<ReflectionResult> {
   const actions = await getSessionActions(input.home, input.sessionId);
 
   const toolSuccessCounts = new Map<string, number>();
@@ -52,15 +63,24 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
       toolFailCounts.set(tool, (toolFailCounts.get(tool) ?? 0) + 1);
     }
 
-    if (a.signals?.exactRepeat || a.signals?.fuzzyRepeat || a.signals?.cycle || a.signals?.stagnation) {
+    if (
+      a.signals?.exactRepeat ||
+      a.signals?.fuzzyRepeat ||
+      a.signals?.cycle ||
+      a.signals?.stagnation
+    ) {
       toolLoopCounts.set(tool, (toolLoopCounts.get(tool) ?? 0) + 1);
     }
 
     // Extract file paths from args if present
     if (a.normalizedArgs && typeof a.normalizedArgs === "object") {
       const args = a.normalizedArgs as Record<string, unknown>;
-      const pathCandidate = args.path || args.file || args.filepath || args.target;
-      if (typeof pathCandidate === "string" && (pathCandidate.includes("/") || pathCandidate.includes("\\"))) {
+      const pathCandidate =
+        args.path || args.file || args.filepath || args.target;
+      if (
+        typeof pathCandidate === "string" &&
+        (pathCandidate.includes("/") || pathCandidate.includes("\\"))
+      ) {
         const cleaned = pathCandidate.trim();
         if (a.signals?.exactRepeat || a.signals?.cycle) {
           filesLooped.add(cleaned);
@@ -91,7 +111,8 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
 
   // Find the successful sequence: the last 3-5 completed non-looping actions
   const nonLooping = actions.filter(
-    (a) => a.status === "completed" && !a.signals?.exactRepeat && !a.signals?.cycle,
+    (a) =>
+      a.status === "completed" && !a.signals?.exactRepeat && !a.signals?.cycle,
   );
   const successfulSequence = nonLooping.slice(-5).map((a) => a.tool);
 
@@ -104,9 +125,10 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
     // 1. Tool strategy candidate
     if (usefulTools.length > 0) {
       const toolList = usefulTools.slice(0, 4).join(" -> ");
-      const stmt = wastefulTools.length > 0
-        ? `Use [${toolList}] for tasks; avoid repetitive [${wastefulTools.slice(0, 3).join(", ")}].`
-        : `Effective tool sequence: [${toolList}].`;
+      const stmt =
+        wastefulTools.length > 0
+          ? `Use [${toolList}] for tasks; avoid repetitive [${wastefulTools.slice(0, 3).join(", ")}].`
+          : `Effective tool sequence: [${toolList}].`;
 
       candidates.push({
         id: candidateId("tool-strategy", stmt, input.scope),
@@ -150,9 +172,10 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
 
     // 3. Avoid candidate if there were significant loops or blocked actions
     if (avoidPaths.length > 0 || wastefulTools.length > 0) {
-      const avoidStmt = avoidPaths.length > 0
-        ? `Avoid repeated exploration of ${avoidPaths.slice(0, 3).join(", ")}; check targeted test output first.`
-        : `Avoid repetitive ${wastefulTools.slice(0, 3).join(", ")} calls when progress stalls.`;
+      const avoidStmt =
+        avoidPaths.length > 0
+          ? `Avoid repeated exploration of ${avoidPaths.slice(0, 3).join(", ")}; check targeted test output first.`
+          : `Avoid repetitive ${wastefulTools.slice(0, 3).join(", ")} calls when progress stalls.`;
 
       candidates.push({
         id: candidateId("avoid", avoidStmt, input.scope),
@@ -173,11 +196,29 @@ export async function reflectOnSession(input: ReflectionInput): Promise<Reflecti
 
     // 4. Playbook candidate if error/cause/fix provided
     if (input.error && input.rootCause && input.fix) {
-      const stmt = `Fix for "${clip(input.error, 80)}": ${clip(input.fix, 120)}`;
+      const playbook = {
+        problem: redact(input.error),
+        rootCause: redact(input.rootCause),
+        fix: redact(input.fix),
+        verification: {
+          command: input.verificationCommand
+            ? redact(input.verificationCommand)
+            : undefined,
+          result: input.verificationOutput
+            ? redact(input.verificationOutput)
+            : undefined,
+        },
+      };
+      const stmt = `Fix for "${clip(playbook.problem, 80)}": ${clip(playbook.fix, 120)}`;
       candidates.push({
-        id: candidateId("playbook", stmt, input.scope),
+        id: candidateId(
+          "playbook",
+          JSON.stringify([playbook.problem, playbook.rootCause, playbook.fix]),
+          input.scope,
+        ),
         type: "playbook",
         statement: redact(stmt),
+        playbook,
         scope: input.scope,
         evidence: {
           sessionId: input.sessionId,

@@ -8,7 +8,7 @@ your projects. The current project's `.burr/` is config, usage, and host
 copies. Never write playbooks or signals into another repo.
 
 If this project has no `.burr/`, create the config before capture or resolve:
-`.burr/config.json` and `.burr/usage.jsonl`. `npx burr init` also drops host
+`.burr/config.json` and `.burr/usage.jsonl`. `burr init` also drops host
 copies into the project.
 
 Search `~/.burr/memory` first so a compacted session or another project's

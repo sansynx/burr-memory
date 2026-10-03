@@ -15,26 +15,16 @@ afterEach(() => {
 });
 
 describe("burr global", () => {
-  it("writes user-level rules and skills without creating memory eagerly", async () => {
+  it("writes supported user-level integrations without creating memory eagerly", async () => {
     await withTempDir(async (home) => {
       process.env.BURR_HOME = home;
       const result = await runGlobal();
       expect(
         result.created.some((path) => path.endsWith(".cursor/rules/burr.mdc")),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         result.created.some((path) => path.endsWith(".windsurf/rules/burr.md")),
-      ).toBe(true);
-
-      const cursor = await readFile(
-        join(home, ".cursor", "rules", "burr.mdc"),
-        "utf8",
-      );
-      expect(cursor).toContain("alwaysApply: true");
-      expect(cursor).toContain("current project's `.burr/`");
-      expect(cursor).toContain(
-        "Never write playbooks or signals into another repo",
-      );
+      ).toBe(false);
 
       for (const name of SKILL_NAMES) {
         const claude = await readFile(
@@ -79,7 +69,7 @@ describe("burr global", () => {
       ).toBe("# mine\n");
       expect(
         result.skipped.some((path) => path.endsWith(".cursor/rules/burr.mdc")),
-      ).toBe(true);
+      ).toBe(false);
     });
   });
 
@@ -94,7 +84,7 @@ describe("burr global", () => {
     });
   });
 
-  it("upgrades a known unedited Burr-owned global rule", async () => {
+  it("leaves formerly installed unsupported global rules untouched", async () => {
     await withTempDir(async (home) => {
       process.env.BURR_HOME = home;
       const file = join(home, ".cursor", "rules", "burr.mdc");
@@ -109,9 +99,12 @@ describe("burr global", () => {
 
       await runGlobal();
 
-      const upgraded = await readFile(file, "utf8");
-      expect(upgraded).toContain("burr-managed: 2");
-      expect(upgraded).toContain("~/.burr/memory/");
+      expect(await readFile(file, "utf8")).toBe(
+        await readFile(
+          join(findPackageRoot(), "test", "fixtures", "global-v1.mdc"),
+          "utf8",
+        ),
+      );
     });
   });
 
@@ -128,7 +121,7 @@ describe("burr global", () => {
       await runGlobal({ log: (line) => logs.push(line) });
 
       expect(await readFile(file, "utf8")).toBe(edited);
-      expect(logs.join("\n")).toMatch(/manual refresh/i);
+      expect(logs.join("\n")).toContain("Cursor and Windsurf");
     });
   });
 
@@ -165,7 +158,9 @@ describe("burr global", () => {
           directory: project,
           worktree: project,
         });
-        expect(Object.keys(hooks.command)).toEqual([...SKILL_NAMES]);
+        const config = { command: {} };
+        await hooks.config(config);
+        expect(Object.keys(config.command)).toEqual([...SKILL_NAMES]);
         const output = { system: [] as string[] };
         await hooks["experimental.chat.system.transform"]({}, output);
         expect(output.system.join("\n")).toContain("~/.burr/memory/");

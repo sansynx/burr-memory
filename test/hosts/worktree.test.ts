@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { runInit } from "../../src/cli/init.js";
 import {
   handleSessionStart,
@@ -22,10 +23,35 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
     mainRepoDir = await mkdtemp(join(tmpdir(), "burr-wt-repo-"));
     worktreeADir = await mkdtemp(join(tmpdir(), "burr-wt-worktree-a-"));
     worktreeBDir = await mkdtemp(join(tmpdir(), "burr-wt-worktree-b-"));
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-C", mainRepoDir, ...args], {
+        windowsHide: true,
+        stdio: "pipe",
+      });
+    git("init", "--initial-branch=main");
+    git(
+      "-c",
+      "user.name=Burr test",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "Synthetic worktree fixture",
+    );
+    git("worktree", "add", "--detach", worktreeADir, "HEAD");
+    git("worktree", "add", "--detach", worktreeBDir, "HEAD");
   });
 
   afterEach(async () => {
-    const opts = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 };
+    const opts = {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    };
     await rm(homeDir, opts);
     await rm(mainRepoDir, opts);
     await rm(worktreeADir, opts);
@@ -36,7 +62,13 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
     await runInit(mainRepoDir);
 
     for (const name of SKILL_NAMES) {
-      const skillPath = join(mainRepoDir, ".agents", "skills", name, "SKILL.md");
+      const skillPath = join(
+        mainRepoDir,
+        ".agents",
+        "skills",
+        name,
+        "SKILL.md",
+      );
       const content = await readFile(skillPath, "utf8");
       expect(content).toContain(`name: ${name}`);
       expect(content).toContain("description:");
@@ -57,17 +89,26 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
         scope: { repo: repoSlug },
         root: worktreeADir,
       },
-      { home: homeDir, root: worktreeADir }
+      { home: homeDir, root: worktreeADir },
     );
     expect(startA.retrievedMemories).toHaveLength(0);
 
     await handlePreToolUse(
-      { sessionId: sessionAId, tool: "run_command", args: { cmd: "npm run build" } },
-      { home: homeDir, root: worktreeADir }
+      {
+        sessionId: sessionAId,
+        tool: "run_command",
+        args: { cmd: "npm run build" },
+      },
+      { home: homeDir, root: worktreeADir },
     );
     await handlePostToolUse(
-      { sessionId: sessionAId, tool: "run_command", args: { cmd: "npm run build" }, output: "tsc completed successfully" },
-      { home: homeDir }
+      {
+        sessionId: sessionAId,
+        tool: "run_command",
+        args: { cmd: "npm run build" },
+        output: "tsc completed successfully",
+      },
+      { home: homeDir },
     );
 
     const endA = await handleSessionEnd(
@@ -83,7 +124,7 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
         scope: { repo: repoSlug },
         root: worktreeADir,
       },
-      { home: homeDir, root: worktreeADir }
+      { home: homeDir, root: worktreeADir },
     );
     expect(endA.verified).toBe(true);
     expect(endA.memoriesPromoted).toBeGreaterThan(0);
@@ -96,12 +137,14 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
         scope: { repo: repoSlug },
         root: worktreeBDir,
       },
-      { home: homeDir, root: worktreeBDir }
+      { home: homeDir, root: worktreeBDir },
     );
 
     expect(startB.retrievedMemories.length).toBeGreaterThan(0);
-    expect(startB.injectedPrompt).toContain("Burr Learned Memory & Guidance");
-    expect(startB.injectedPrompt).toContain("Run npm run build to generate dist/ output before test suite");
+    expect(startB.injectedPrompt).toContain("untrusted reference material");
+    expect(startB.injectedPrompt).toContain(
+      "Run npm run build to generate dist/ output before test suite",
+    );
   }, 20000);
 
   it("intercepts and blocks repetitive loop cycles in agent sessions", async () => {
@@ -115,23 +158,29 @@ describe("Git Worktree Memory & Multi-Session Agent Isolation", () => {
         scope: { repo: "sansynx/burr-memory" },
         root: worktreeADir,
       },
-      { home: homeDir, root: worktreeADir }
+      { home: homeDir, root: worktreeADir },
     );
 
     for (let i = 0; i < 3; i++) {
       await handlePreToolUse(
         { sessionId, tool: "run_command", args: { cmd: "npm test" } },
-        { home: homeDir, root: worktreeADir }
+        { home: homeDir, root: worktreeADir },
       );
       await handlePostToolUse(
-        { sessionId, tool: "run_command", args: { cmd: "npm test" }, output: "fail", error: "code 1" },
-        { home: homeDir }
+        {
+          sessionId,
+          tool: "run_command",
+          args: { cmd: "npm test" },
+          output: "fail",
+          error: "code 1",
+        },
+        { home: homeDir },
       );
     }
 
     const loopResult = await handlePreToolUse(
       { sessionId, tool: "run_command", args: { cmd: "npm test" } },
-      { home: homeDir, root: worktreeADir }
+      { home: homeDir, root: worktreeADir },
     );
 
     expect(loopResult.score).toBeGreaterThanOrEqual(50);

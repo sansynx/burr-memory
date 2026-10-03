@@ -1,12 +1,10 @@
 // burr-managed: 2
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 const RUNTIME_URL = new URL("../../dist/codex/index.js", import.meta.url).href;
 const USER_HOME = process.env.BURR_HOME || homedir();
-const receipts = (globalThis[Symbol.for("burr.opencode.tool-results")] ??=
-  new Map());
 const DEFAULT_INSTRUCTIONS = `Burr is local debugging memory for coding agents.
 
 Before a non-trivial fix, search ~/.burr/memory/. Capture reusable failures only after redacting sensitive data. Write shared playbooks only after a real verification. Keep Burr offline.`;
@@ -16,52 +14,40 @@ const COMMANDS = {
   burr: {
     description: "Show Burr status or set its mode",
     template:
-      "Run `burr status` and report the result. If the user requests on, strict, or off, run `burr <mode>` instead.",
+      "Run `npx burr status` and report the result. If the user requests on, strict, or off, run `npx burr <mode>` instead.",
   },
   "burr-search": {
     description: "Search shared Burr memory",
     template:
-      "Search `~/.burr/memory/` by running `burr search <query>` with the user's redacted error or context, then report the useful hits.",
+      "Search `~/.burr/memory/` by running `npx burr search <query>` with the user's redacted error or context, then report the useful hits.",
   },
   "burr-capture": {
     description: "Capture a reusable failure",
     template:
-      "For a reusable failure, run `burr capture --error <text>` with relevant optional flags. Redact sensitive data first.",
+      "For a reusable failure, run `npx burr capture --error <text>` with relevant optional flags. Redact sensitive data first.",
   },
   "burr-resolve": {
     description: "Write a verified Burr playbook",
     template:
-      "Only after a real verification, run `burr resolve --error <text> --cause <text> --fix <text> --verify <text>`.",
+      "Only after a real verification, run `npx burr resolve --error <text> --cause <text> --fix <text> --verify <text>`.",
   },
   "burr-promote": {
     description: "Promote a legacy project playbook",
     template:
-      "Run `burr promote [path]` only for a legacy project playbook that belongs in shared Burr memory.",
+      "Run `npx burr promote [path]` only for a legacy project playbook that belongs in shared Burr memory.",
   },
   "burr-audit": {
     description: "Audit Burr usage",
-    template: "Run `burr audit` and summarize the local usage ledger.",
+    template: "Run `npx burr audit` and summarize the local usage ledger.",
   },
   "burr-help": {
     description: "Show Burr command help",
-    template: "Run `burr help` and present the command reference.",
+    template: "Run `npx burr help` and present the command reference.",
   },
 };
 
 function projectRoot(ctx) {
-  const cwd = ctx?.directory || ctx?.worktree || process.cwd();
-  let candidate = cwd;
-  for (;;) {
-    try {
-      readFileSync(join(candidate, ".burr", "config.json"), "utf8");
-      return candidate;
-    } catch (error) {
-      if (error.code !== "ENOENT") return candidate;
-    }
-    const parent = dirname(candidate);
-    if (parent === candidate) return cwd;
-    candidate = parent;
-  }
+  return ctx?.worktree || ctx?.directory || process.cwd();
 }
 
 function readText(path) {
@@ -95,16 +81,38 @@ function loadInstructions(root, mode) {
     : instructions;
 }
 
+async function attachV2(ctx, root) {
+  if (typeof ctx?.command?.transform === "function") {
+    await ctx.command.transform((list) => {
+      for (const [name, command] of Object.entries(COMMANDS)) {
+        list.update(name, (draft) => {
+          draft.description = command.description;
+          draft.template = command.template;
+        });
+      }
+    });
+  }
+
+  if (typeof ctx?.session?.hook === "function") {
+    await ctx.session.hook("context", (event) => {
+      const mode = loadMode(root);
+      if (mode === "off") return;
+      const instructions = loadInstructions(root, mode);
+      if (!instructions) return;
+      if (Array.isArray(event.system)) event.system.push(instructions);
+    });
+  }
+}
+
 export default async function burr(ctx) {
   const root = projectRoot(ctx);
 
+  if (ctx?.id === undefined && typeof ctx?.setup !== "function") {
+    await attachV2(ctx, root);
+  }
+
   return {
-    config: async (config) => {
-      config.command ??= {};
-      for (const [name, command] of Object.entries(COMMANDS)) {
-        config.command[name] ??= { ...command };
-      }
-    },
+    command: COMMANDS,
     "tool.execute.before": async (input, output) => {
       if (loadMode(root) === "off") return;
       const runtime = await import(RUNTIME_URL);
@@ -120,45 +128,19 @@ export default async function burr(ctx) {
         throw new Error(
           result.message ?? "Burr detected a repeated failing action.",
         );
-      if (result.warning && ctx?.client?.tui?.showToast) {
-        await ctx.client.tui.showToast({
-          body: { message: result.warning, variant: "warning" },
-        });
-      }
     },
     "tool.execute.after": async (input, output) => {
       if (loadMode(root) === "off") return;
-      const key = input.callID
-        ? JSON.stringify([root, input.sessionID, input.callID])
-        : undefined;
-      if (key && receipts.has(key)) return receipts.get(key);
-      const record = (async () => {
-        const runtime = await import(RUNTIME_URL);
-        await runtime.handlePostToolUse(
-          {
-            sessionId: input.sessionID,
-            tool: input.tool,
-            args: input.args ?? {},
-            output: output?.output ?? "",
-            error:
-              typeof output?.metadata?.exit === "number" &&
-              output.metadata.exit !== 0
-                ? output.output || "Tool execution failed"
-                : undefined,
-          },
-          { root, harness: "opencode" },
-        );
-      })();
-      if (key) {
-        receipts.set(key, record);
-        if (receipts.size > 256) receipts.delete(receipts.keys().next().value);
-      }
-      try {
-        await record;
-      } catch (error) {
-        if (key) receipts.delete(key);
-        throw error;
-      }
+      const runtime = await import(RUNTIME_URL);
+      await runtime.handlePostToolUse(
+        {
+          sessionId: input.sessionID,
+          tool: input.tool,
+          args: input.args ?? {},
+          output: output.output ?? "",
+        },
+        { root, harness: "opencode" },
+      );
     },
     "experimental.chat.system.transform": async (_input, output) => {
       const mode = loadMode(root);

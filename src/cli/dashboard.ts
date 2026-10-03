@@ -116,7 +116,7 @@ function renderHtml(): string {
     <div class="grid" id="statsGrid">
       <div class="card"><div class="card-title">Active Memories</div><div class="card-val" id="activeMemories">-</div><div class="card-sub" id="hitRateSub">Hit rate: -%</div></div>
       <div class="card"><div class="card-title">Candidates Awaiting Admission</div><div class="card-val" id="candidates">-</div><div class="card-sub">Caller verification required</div></div>
-      <div class="card"><div class="card-title">Loops Prevented</div><div class="card-val" id="loopsDetected">-</div><div class="card-sub" id="blockedSub">- blocked</div></div>
+      <div class="card"><div class="card-title">Loops Detected</div><div class="card-val" id="loopsDetected">-</div><div class="card-sub" id="blockedSub">- blocked</div></div>
       <div class="card"><div class="card-title">Verified Recoveries</div><div class="card-val" id="verifiedRecoveries">-</div><div class="card-sub" id="reusedSub">- reused</div></div>
     </div>
 
@@ -331,7 +331,9 @@ export async function runDashboard(
         }
 
         if (pathname === "/api/memories") {
-          const memories = await listAllMemories(home);
+          const memories = (await listAllMemories(home)).filter(
+            (memory) => memory.status === "active",
+          );
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(memories));
           return;

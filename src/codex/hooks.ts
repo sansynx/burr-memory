@@ -220,9 +220,21 @@ export async function handlePostToolUse(
   );
 
   const recentActions = await getSessionActions(home, input.sessionId);
-  const stagnation = detectOutputStagnation(recentActions);
-
-  const status = input.error ? "failed" : "completed";
+  const status = input.error !== undefined ? "failed" : "completed";
+  const stagnation = detectOutputStagnation([
+    ...recentActions,
+    {
+      sessionId: input.sessionId,
+      sequence: 0,
+      timestamp: new Date().toISOString(),
+      harness: options.harness ?? "codex",
+      tool: input.tool,
+      normalizedArgs,
+      inputFingerprint: inputFp,
+      outputFingerprint: outputFp,
+      status,
+    },
+  ]);
 
   await recordAction(home, {
     sessionId: input.sessionId,

@@ -1,7 +1,10 @@
 import type { Admission, CaptureInput, ResolveInput } from "./types.js";
 
 const DISCARD: Array<{ reason: string; re: RegExp }> = [
-  { reason: "port-in-use", re: /EADDRINUSE|address already in use|port \d+\s+[^\r\n]*in use/i },
+  {
+    reason: "port-in-use",
+    re: /EADDRINUSE|address already in use|port \d+\s+[^\r\n]*in use/i,
+  },
   {
     reason: "dev-server-down",
     re: /ECONNREFUSED[^\r\n]*(?:localhost|127\.0\.0\.1)|connect ECONNREFUSED|dev server (?:is )?(?:not running|isn't running)/i,
@@ -23,7 +26,11 @@ const DISCARD: Array<{ reason: string; re: RegExp }> = [
 const KEEP =
   /TypeError|ReferenceError|SyntaxError|RangeError|ZodError|TS\d{3,5}|cannot find module ['"][a-z0-9@/~_-]+['"]|(?:wrong\s+)?API\s+(?:error|response|schema|contract|key|shape)|schema|validation|unauthorized|hydrat|cors|csrf|misconfigured|library misuse|incorrect usage|wrong (?:type|config|endpoint)/i;
 
-function haystack(input: { error?: string; rootCause?: string; stack?: string }): string {
+function haystack(input: {
+  error?: string;
+  rootCause?: string;
+  stack?: string;
+}): string {
   return [input.error, input.rootCause, input.stack].filter(Boolean).join("\n");
 }
 
@@ -41,16 +48,30 @@ function isRealVerification(text: string): boolean {
   ) {
     return false;
   }
+  const outcome = trimmed.replace(/\b0\s+fail(?:ed|ing|ures|s)?\b/gi, "");
+  if (
+    /\b(?:fail(?:ed|ing|ures|s)?|not pass(?:ed|ing)?|did not pass|will (?:run|test)|exit(?:ed)?(?: code)? [1-9]\d*)\b/i.test(
+      outcome,
+    )
+  )
+    return false;
   return (
-    /\b(?:npm test|pnpm test|yarn test|vitest|pytest|cargo test|go test|jest)\b/i.test(trimmed) ||
-    /\b(?:\d+ passed|0 fail|all tests pass|tests? pass)/i.test(trimmed) ||
-    (/\breproduced\b/i.test(trimmed) && /\b(?:gone|no longer|fixed|disappear)/i.test(trimmed)) ||
-    /\b(?:measured|benchmark|timing|before\/after)\b/i.test(trimmed) ||
+    /\b(?:[1-9]\d* passed|all tests pass(?:ed)?|tests? pass(?:ed)?)\b/i.test(
+      trimmed,
+    ) ||
+    (/\breproduced\b/i.test(trimmed) &&
+      /\b(?:gone|no longer|fixed|disappear)/i.test(trimmed)) ||
+    (/\b(?:measured|benchmark|timing)\b/i.test(trimmed) &&
+      /\d/.test(trimmed) &&
+      /\bbefore\b/i.test(trimmed) &&
+      /\bafter\b/i.test(trimmed)) ||
     /\bexit(?:ed)?(?: code)? 0\b/i.test(trimmed)
   );
 }
 
-export function admitSignal(input: Pick<CaptureInput, "error" | "rootCause" | "stack">): Admission {
+export function admitSignal(
+  input: Pick<CaptureInput, "error" | "rootCause" | "stack">,
+): Admission {
   const text = haystack(input);
   const reason = discardReason(text);
   if (reason && KEEP.test(text)) return { ok: true };

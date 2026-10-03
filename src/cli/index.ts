@@ -23,7 +23,7 @@ const HELP = `Burr — local debugging memory and reliability runtime for coding
 
 Usage:
   burr init [dir]              write .burr/ and host own-files in one project
-  burr global                  turn Burr on for every new project (user-level rules)
+  burr global                  install user-level skills and supported host hooks
   burr [on|strict|off]         status, or set mode
   burr search <text>           search shared memory on this machine
   burr capture --error <text>  save a redacted signal
@@ -114,7 +114,7 @@ export async function main(argv: string[]): Promise<number> {
       }
       return 0;
     } catch {
-      console.log("Burr is not initialized. Run `npx burr init`.");
+      console.log("Burr is not initialized. Run `burr init`.");
       return 1;
     }
   }

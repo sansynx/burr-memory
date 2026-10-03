@@ -46,7 +46,7 @@ describe("CLI Extended Commands", () => {
       const mem = await promoteCandidate(
         {
           id: "cand-cli-test",
-          type: "knowledge",
+          type: "repository-rule",
           statement: "Prisma client requires generate step.",
           scope: { level: "global" },
           evidence: { sessionId: "s1", observedCount: 2, verified: true },

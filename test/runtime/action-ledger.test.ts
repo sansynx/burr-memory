@@ -20,6 +20,178 @@ import {
 import { withTempDir } from "../helpers.js";
 
 describe("Action Ledger", () => {
+  it("isolates the first uncached result from later cache reads", async () => {
+    await withTempDir(async (home) => {
+      await recordAction(home, {
+        sessionId: "copy-check",
+        harness: "test",
+        tool: "read",
+        normalizedArgs: { path: "original" },
+        inputFingerprint: "fp",
+        status: "completed",
+      });
+      clearSessionCache();
+      const first = await getSessionActions(home, "copy-check");
+      (first[0]!.normalizedArgs as { path: string }).path = "mutated";
+      expect(
+        (await getSessionActions(home, "copy-check"))[0]?.normalizedArgs,
+      ).toEqual({ path: "original" });
+    });
+  });
+
+  it("skips incomplete action records without hiding valid runs or corrupting sequences", async () => {
+    await withTempDir(async (home) => {
+      const action = {
+        sessionId: "valid-record",
+        harness: "test",
+        tool: "read",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed" as const,
+      };
+      await recordAction(home, action);
+      await writeFile(
+        runFilePath(home, "broken-record"),
+        JSON.stringify({ sessionId: "broken-record", tool: "read" }) + "\n",
+      );
+      const path = runFilePath(home, action.sessionId);
+      await writeFile(
+        path,
+        (await readFile(path, "utf8")) +
+          JSON.stringify({ sessionId: action.sessionId, tool: "read" }) +
+          "\n",
+      );
+      expect(await listRuns(home)).toEqual([action.sessionId]);
+      expect((await recordAction(home, action)).sequence).toBe(2);
+    });
+  });
+
+  it("lists each original session from a legacy filename collision", async () => {
+    await withTempDir(async (home) => {
+      const first = await recordAction(home, {
+        sessionId: "legacy_a",
+        harness: "test",
+        tool: "read",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed",
+      });
+      await writeFile(
+        runFilePath(home, "legacy_a"),
+        [first, { ...first, sessionId: "legacy/a", sequence: 2 }]
+          .map((action) => JSON.stringify(action))
+          .join("\n") + "\n",
+      );
+      expect((await listRuns(home)).sort()).toEqual(
+        ["legacy/a", "legacy_a"].sort(),
+      );
+    });
+  });
+
+  it("reads legacy session filenames and preserves their history on the next append", async () => {
+    await withTempDir(async (home) => {
+      const first = await recordAction(home, {
+        sessionId: "a/b",
+        harness: "test",
+        tool: "read",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed",
+      });
+      await rename(
+        runFilePath(home, "a/b"),
+        join(home, ".burr", "runs", "a_b.jsonl"),
+      );
+      expect((await loadRun(home, "a/b"))?.toolCalls).toBe(1);
+      await recordAction(home, {
+        ...first,
+        sequence: undefined,
+        tool: "write",
+      });
+      expect(
+        (await loadRun(home, "a/b"))?.actions.map((a) => a.sequence),
+      ).toEqual([1, 2]);
+      expect(await listRuns(home)).toEqual(["a/b"]);
+    });
+  });
+  it.each(["", "{truncated"])(
+    "recovers a missing terminal newline followed by %s",
+    async (tail) => {
+      await withTempDir(async (home) => {
+        const first = await recordAction(home, {
+          sessionId: "recovery",
+          harness: "test",
+          tool: "read",
+          normalizedArgs: {},
+          inputFingerprint: "fp",
+          status: "completed",
+        });
+        await writeFile(
+          runFilePath(home, "recovery"),
+          JSON.stringify(first) + (tail ? "\n" + tail : ""),
+        );
+        await recordAction(home, { ...first, sequence: undefined });
+        expect(
+          (await loadRun(home, "recovery"))?.actions.map((a) => a.sequence),
+        ).toEqual([1, 2]);
+      });
+    },
+  );
+  it("keeps colliding and long session identifiers isolated and discoverable", async () => {
+    await withTempDir(async (home) => {
+      const ids = ["a/b", "a?b", "a".repeat(81), "a".repeat(80) + "b", "CON"];
+      for (const sessionId of ids) {
+        await recordAction(home, {
+          sessionId,
+          harness: "test",
+          tool: "read",
+          normalizedArgs: {},
+          inputFingerprint: "fp",
+          status: "completed",
+        });
+      }
+      expect(new Set(await listRuns(home))).toEqual(new Set(ids));
+      for (const sessionId of ids)
+        expect(
+          (await loadRun(home, sessionId))?.actions.map((a) => a.sessionId),
+        ).toEqual([sessionId]);
+    });
+  });
+  it("refreshes runtime history after an external append", async () => {
+    await withTempDir(async (home) => {
+      const first = await recordAction(home, {
+        sessionId: "external",
+        harness: "test",
+        tool: "read",
+        normalizedArgs: {},
+        inputFingerprint: "fp",
+        status: "completed",
+      });
+      await getSessionActions(home, "external");
+      await writeFile(
+        runFilePath(home, "external"),
+        [first, { ...first, sequence: 2, tool: "write" }]
+          .map((a) => JSON.stringify(a))
+          .join("\n") + "\n",
+      );
+      expect(
+        (await getSessionActions(home, "external")).map((a) => a.tool),
+      ).toEqual(["read", "write"]);
+    });
+  });
+  it("does not treat mentioning test as successful verification", async () => {
+    await withTempDir(async (home) => {
+      await recordAction(home, {
+        sessionId: "echo",
+        harness: "test",
+        tool: "exec",
+        normalizedArgs: { cmd: "echo test" },
+        inputFingerprint: "fp",
+        status: "completed",
+      });
+      expect((await loadRun(home, "echo"))?.verified).toBe(false);
+    });
+  });
   it("assigns unique sequences in persisted order for concurrent actions", async () => {
     await withTempDir(async (home) => {
       const action = {
@@ -88,7 +260,7 @@ describe("Action Ledger", () => {
       await rename(path, `${path}.backup`);
       await mkdir(path);
       await expect(recordAction(home, action)).rejects.toThrow();
-      expect(await getSessionActions(home, action.sessionId)).toHaveLength(1);
+      await expect(getSessionActions(home, action.sessionId)).rejects.toThrow();
     });
   });
   it("isolates identical session ids in different homes", async () => {
