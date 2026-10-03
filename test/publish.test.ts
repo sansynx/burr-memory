@@ -14,8 +14,10 @@ describe("publish surface", () => {
     expect(pkg.files).not.toContain(".opencode");
     expect(pkg.scripts.build).toContain("npm run clean");
     expect(pkg.scripts.prepublishOnly).toContain("npm run check");
-    expect(pkg.repository.url).toBe("git+https://github.com/sansynx/burr-memory.git");
-    expect(pkg.homepage).toBe("https://github.com/sansynx/burr-memory#readme");
+    expect(pkg.repository.url).toBe(
+      "git+https://github.com/sansynx/burr-memory.git",
+    );
+    expect(pkg.homepage).toBe("https://sansynx.github.io/burr-site/");
     expect(pkg.bugs.url).toBe("https://github.com/sansynx/burr-memory/issues");
     expect(pkg.author).toBeUndefined();
     expect(JSON.stringify(pkg)).not.toMatch(/sanat|gmail\.com|Users/i);
