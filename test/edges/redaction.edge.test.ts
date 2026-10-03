@@ -17,19 +17,22 @@ describe("redaction edges", () => {
   });
 
   it("redacts .env-style SECRET_KEY and AWS secret assignments", () => {
+    const syntheticAwsSecret = ["synthetic", "aws", "fixture"].join("-");
     const dump = [
       "DATABASE_URL=postgres://app:supersecret@db/app",
       "SECRET_KEY=not-for-disk",
-      "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG",
+      `AWS_SECRET_ACCESS_KEY=${syntheticAwsSecret}`,
     ].join("\n");
     const text = redact(dump);
     expect(text).not.toContain("supersecret");
     expect(text).not.toContain("not-for-disk");
-    expect(text).not.toContain("wJalrXUtnFEMI/K7MDENG");
+    expect(text).not.toContain(syntheticAwsSecret);
   });
 
   it("redacts a GitHub token and a Slack token together", () => {
-    const text = redact("gho_abcdefghijklmnopqrstuvwx1234567890 and xoxb-1234567890-abcdefghij");
+    const text = redact(
+      "gho_abcdefghijklmnopqrstuvwx1234567890 and xoxb-1234567890-abcdefghij",
+    );
     expect(text).not.toContain("gho_abcdefghijklmnopqrstuvwx1234567890");
     expect(text).not.toContain("xoxb-1234567890-abcdefghij");
   });

@@ -19,9 +19,11 @@ No account, API key, hosted memory, or telemetry. Burr itself makes no network r
 Requires **Node.js 22.12+**. Development and CI support Node 22, 24, and 26.
 
 ```bash
-npm install -g burr-memory
+npm install -g burr-memory@latest
 burr global
 ```
+
+Re-run the install command to update to the latest published release. Updates are not automatic.
 
 This installs user-level skills and supported host hooks. **Review new Codex hooks in `/hooks` before using them.** Cursor and Windsurf need project installation or manual global configuration.
 
@@ -35,7 +37,7 @@ burr search "TypeError: response.users is undefined"
 <summary>Install in one project instead</summary>
 
 ```bash
-npm install -D burr-memory
+npm install -D burr-memory@latest
 npm exec -- burr init
 npm exec -- burr search "your error"
 ```
