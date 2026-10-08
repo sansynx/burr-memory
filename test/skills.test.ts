@@ -17,7 +17,10 @@ describe("canonical package files", () => {
   it("ships seven SKILL.md files with the locked command names", async () => {
     const root = findPackageRoot();
     for (const name of SKILLS) {
-      const markdown = await readFile(join(root, "skills", name, "SKILL.md"), "utf8");
+      const markdown = await readFile(
+        join(root, "skills", name, "SKILL.md"),
+        "utf8",
+      );
       expect(markdown).toContain(`name: ${name}`);
       expect(markdown).toContain("description:");
     }
@@ -25,8 +28,12 @@ describe("canonical package files", () => {
 
   it("ships host plugin manifests that point at the shared skills tree", async () => {
     const root = findPackageRoot();
-    const claude = JSON.parse(await readFile(join(root, ".claude-plugin", "plugin.json"), "utf8"));
-    const codex = JSON.parse(await readFile(join(root, ".codex-plugin", "plugin.json"), "utf8"));
+    const claude = JSON.parse(
+      await readFile(join(root, ".claude-plugin", "plugin.json"), "utf8"),
+    );
+    const codex = JSON.parse(
+      await readFile(join(root, ".codex-plugin", "plugin.json"), "utf8"),
+    );
     expect(claude.name).toBe("burr");
     expect(codex.name).toBe("burr");
     expect(codex.skills).toBe("./skills/");
@@ -42,48 +49,43 @@ describe("canonical package files", () => {
     expect(svg).not.toMatch(/>burr</);
   });
 
-  it("ships a portable how-it-works SVG without replacement characters", async () => {
+  it("ships accessible, standalone architecture and workflow SVGs", async () => {
     const root = findPackageRoot();
-    const svg = await readFile(join(root, "assets", "burr-how-it-works.svg"), "utf8");
-    expect(svg).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
-    expect(svg).toContain("</svg>");
-    expect(svg).not.toContain("\uFFFD");
-    expect(svg).toContain("~/.burr/memory");
-    expect(svg).toContain("Any project. Same machine.");
+    for (const name of ["burr-how-it-works.svg", "burr-architecture.svg"]) {
+      const svg = await readFile(join(root, "assets", name), "utf8");
+      expect(svg).toMatch(/<svg\s+xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+      expect(svg).toContain("</svg>");
+      expect(svg).not.toContain("\uFFFD");
+      expect(svg).toMatch(/<title[^>]*>[^<]+<\/title>/);
+      expect(svg).toMatch(/<desc[^>]*>[\s\S]+?<\/desc>/);
+      expect(svg).not.toMatch(/<script|<foreignObject|href="https?:/i);
+    }
+    const architecture = await readFile(
+      join(root, "assets", "burr-architecture.svg"),
+      "utf8",
+    );
+    expect(architecture).toContain("~/.burr/memory/");
+    expect(architecture).toContain("~/.burr/runs/");
   });
 
-  it("keeps how-it-works arrows in the gutters instead of through card titles", async () => {
+  it("keeps workflow connectors between the stage columns", async () => {
     const root = findPackageRoot();
-    const svg = await readFile(join(root, "assets", "burr-how-it-works.svg"), "utf8");
-    const cards = [...svg.matchAll(/<rect x="(\d+)" y="(\d+)" width="(1[56]0)" height="128"/g)].map(
-      (match) => ({
-        x: Number(match[1]),
-        y: Number(match[2]),
-        width: Number(match[3]),
-        height: 128,
-      }),
+    const svg = await readFile(
+      join(root, "assets", "burr-how-it-works.svg"),
+      "utf8",
     );
-    expect(cards).toHaveLength(5);
-
-    const connectorBlock = svg.slice(
-      svg.indexOf("<!-- hooked connectors -->"),
-      svg.indexOf("<!-- 1 break -->"),
+    const columns = [
+      ...svg.matchAll(/<line\s+x1="(\d+)"\s+y1="\d+"\s+x2="(\d+)"/g),
+    ].map((match) => ({ start: Number(match[1]), end: Number(match[2]) }));
+    const connectors = [...svg.matchAll(/<path\s+d="M(\d+) \d+ H(\d+)"/g)].map(
+      (match) => ({ start: Number(match[1]), end: Number(match[2]) }),
     );
-    const ends = [...connectorBlock.matchAll(/<path d="([^"]+)"/g)]
-      .map((match) => {
-        const horizontals = [...match[1].matchAll(/\sH(\d+)/g)];
-        return Number(horizontals.at(-1)?.[1]);
-      })
-      .filter((end) => Number.isFinite(end));
-    expect(ends).toEqual(cards.slice(1).map((card) => card.x));
-
-    for (const [index, end] of ends.entries()) {
-      const previous = cards[index];
-      const next = cards[index + 1];
-      expect(end).toBeGreaterThan(previous.x + previous.width);
-      expect(end).toBe(next.x);
+    expect(columns.length).toBeGreaterThan(1);
+    expect(connectors).toHaveLength(columns.length - 1);
+    for (const [index, connector] of connectors.entries()) {
+      expect(connector.start).toBeGreaterThan(columns[index].end);
+      expect(connector.end).toBeLessThan(columns[index + 1].start);
+      expect(connector.end).toBeGreaterThan(connector.start);
     }
-
-    expect(svg).toMatch(/M475 240 V294 H528/);
   });
 });

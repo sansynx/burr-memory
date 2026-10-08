@@ -1,90 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
-  <title id="title">How Burr works</title>
-  <desc id="desc">A failure is searched against shared local memory, captured as a redacted signal if it is reusable, then written as a playbook only after a verified fix so another project or session can hook onto it.</desc>
-  <rect width="960" height="420" fill="#0F0F0E"/>
-
-  <g transform="translate(36 36) scale(0.28)">
-    <g transform="translate(64 64)">
-      <g fill="#F4EEE7">
-        <path transform="rotate(15)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(105)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(150)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(195)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(240)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(285)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-        <path transform="rotate(60)" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-      </g>
-      <path transform="rotate(330)" fill="#FF5A1F" d="M4.6-16.2 C6.4-28 7.2-38 5.4-46.2 C12.8-44.6 16.2-40.4 14.8-33.6 L8.8-16.4 Z"/>
-      <circle r="17.5" fill="#F4EEE7"/>
-    </g>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1200 280"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">From failure to reusable fix</title>
+  <desc id="desc">
+    Search previous fixes. Capture useful failure evidence. Verify with your
+    actual tests. Save a playbook.
+  </desc>
+  <rect width="100%" height="100%" fill="#000000" />
+  <defs>
+    <marker
+      id="arrow"
+      markerWidth="8"
+      markerHeight="8"
+      refX="7"
+      refY="4"
+      orient="auto"
+    >
+      <path d="M1 1 L7 4 L1 7" fill="none" stroke="#b0b0b8" />
+    </marker>
+  </defs>
+  <g font-family="Arial, sans-serif" fill="#ffffff">
+    <line x1="0" y1="32" x2="256" y2="32" stroke="#3a3a3f" />
+    <text x="0" y="68" font-size="12" fill="#b0b0b8">01</text>
+    <text x="0" y="124" font-size="28" letter-spacing="1">SEARCH</text>
+    <text x="0" y="160" font-size="16" fill="#d0d0d5">
+      Find a relevant fix.
+    </text>
+    <path d="M260 120 H284" stroke="#b0b0b8" marker-end="url(#arrow)" />
+    <line x1="304" y1="32" x2="560" y2="32" stroke="#3a3a3f" />
+    <text x="304" y="68" font-size="12" fill="#b0b0b8">02</text>
+    <text x="304" y="124" font-size="28" letter-spacing="1">CAPTURE</text>
+    <text x="304" y="160" font-size="16" fill="#d0d0d5">
+      Keep the failure evidence.
+    </text>
+    <path d="M564 120 H588" stroke="#b0b0b8" marker-end="url(#arrow)" />
+    <line x1="608" y1="32" x2="864" y2="32" stroke="#3a3a3f" />
+    <text x="608" y="68" font-size="12" fill="#b0b0b8">03</text>
+    <text x="608" y="124" font-size="28" letter-spacing="1">VERIFY</text>
+    <text x="608" y="160" font-size="16" fill="#d0d0d5">
+      Run your real checks.
+    </text>
+    <path d="M868 120 H892" stroke="#b0b0b8" marker-end="url(#arrow)" />
+    <line x1="912" y1="32" x2="1168" y2="32" stroke="#3a3a3f" />
+    <text x="912" y="68" font-size="12" fill="#b0b0b8">04</text>
+    <text x="912" y="124" font-size="28" letter-spacing="1">SAVE</text>
+    <text x="912" y="160" font-size="16" fill="#d0d0d5">
+      Write a reusable playbook.
+    </text>
   </g>
-  <text x="86" y="48" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="22">How a burr rides</text>
-  <text x="86" y="70" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.7">local files only | no cloud | no key</text>
-
-  <!-- hooked connectors -->
-  <g fill="none" stroke="#F4EEE7" stroke-width="1.6">
-    <path d="M186 176 H218"/>
-    <path d="M368 176 H400"/>
-    <path d="M550 176 H582"/>
-    <path d="M732 176 H764" stroke="#FF5A1F"/>
-  </g>
-  <g fill="#F4EEE7">
-    <path d="M218 176 l-7 -5 v10 z"/>
-    <path d="M400 176 l-7 -5 v10 z"/>
-    <path d="M582 176 l-7 -5 v10 z"/>
-    <path d="M764 176 l-7 -5 v10 z" fill="#FF5A1F"/>
-  </g>
-
-  <!-- 1 break -->
-  <g>
-    <rect x="36" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
-    <text x="52" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">01  break</text>
-    <text x="52" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">The failure</text>
-    <text x="52" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">error | stack</text>
-    <text x="52" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">command | exit</text>
-  </g>
-
-  <!-- 2 search -->
-  <g>
-    <rect x="218" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
-    <text x="234" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">02  search</text>
-    <text x="234" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Ask memory</text>
-    <text x="234" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">~/.burr/memory</text>
-    <text x="234" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">token overlap</text>
-  </g>
-
-  <!-- 3 capture -->
-  <g>
-    <rect x="400" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
-    <text x="416" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">03  hook</text>
-    <text x="416" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Capture</text>
-    <text x="416" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">redact | admit</text>
-    <text x="416" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">signals/*.md</text>
-  </g>
-
-  <!-- 4 verify -->
-  <g>
-    <rect x="582" y="112" width="150" height="128" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1.4"/>
-    <text x="598" y="138" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">04  prove</text>
-    <text x="598" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Verify</text>
-    <text x="598" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">test run or</text>
-    <text x="598" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">repro is gone</text>
-  </g>
-
-  <!-- 5 ride -->
-  <g>
-    <rect x="764" y="112" width="160" height="128" fill="#0F0F0E" stroke="#FF5A1F" stroke-width="1.6"/>
-    <text x="780" y="138" fill="#FF5A1F" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">05  ride</text>
-    <text x="780" y="168" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="18">Playbook</text>
-    <text x="780" y="194" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">next session</text>
-    <text x="780" y="212" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.75">hooks on</text>
-  </g>
-
-  <!-- discard branch -->
-  <path d="M475 240 V294 H528" fill="none" stroke="#F4EEE7" stroke-width="1.2" opacity="0.55"/>
-  <rect x="528" y="272" width="300" height="44" fill="#0F0F0E" stroke="#F4EEE7" stroke-width="1" opacity="0.9"/>
-  <text x="544" y="300" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" opacity="0.8">discard ephemeral junk | nothing hits disk</text>
-
-  <text x="36" y="388" fill="#F4EEE7" font-family="Georgia, 'Times New Roman', serif" font-size="15">Any project. Same machine. The next passerby does not guess again.</text>
-  <text x="36" y="408" fill="#F4EEE7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" opacity="0.6">.burr/config.json | mode on | strict | off</text>
 </svg>
