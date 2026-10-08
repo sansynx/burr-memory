@@ -1,112 +1,155 @@
 <svg
   xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 720 620"
+  viewBox="0 0 760 620"
   role="img"
   aria-labelledby="title desc"
 >
-  <title id="title">Burr local architecture</title>
+  <title id="title">Burr shared local memory architecture</title>
   <desc id="desc">
-    Skills and CLI read and write Markdown memory. Supported host adapters and
-    runtime use structured lessons and record local run history. Project
-    configuration and usage remain in the project. No hosted memory.
+    Skills and CLI search and save Markdown signals and playbooks. The loaded
+    host adapter and runtime retrieve and learn from JSON lessons. Both stores
+    belong to shared memory on this machine. Runtime playbooks export to
+    Markdown. The runtime separately records run history. Project .burr stores
+    configuration and usage.
   </desc>
-  <rect width="100%" height="100%" fill="#000000" />
   <defs>
     <marker
       id="arrow"
-      markerWidth="8"
-      markerHeight="8"
-      refX="7"
-      refY="4"
-      orient="auto"
+      markerWidth="10"
+      markerHeight="10"
+      refX="8"
+      refY="5"
+      orient="auto-start-reverse"
+      markerUnits="userSpaceOnUse"
     >
-      <path d="M1 1 L7 4 L1 7" fill="none" stroke="#b0b0b8" />
+      <path d="M1 1 L8 5 L1 9" fill="none" stroke="#ffffff" stroke-width="2" />
     </marker>
   </defs>
+  <rect width="760" height="620" fill="#000000" />
   <g font-family="Arial, sans-serif" fill="#ffffff">
-    <text x="32" y="32" font-size="12" letter-spacing="2" fill="#b0b0b8">
-      YOUR MACHINE / TWO RETRIEVAL PATHS
+    <rect
+      x="20"
+      y="204"
+      width="680"
+      height="240"
+      rx="8"
+      fill="#0a0a0a"
+      stroke="#888888"
+    />
+    <text x="208" y="234" font-size="22" font-weight="700">
+      Shared local memory
     </text>
+    <text x="208" y="258" font-size="16" fill="#d0d0d5">~/.burr/memory/</text>
     <path
-      d="M184 164 V244 M536 164 V244"
+      d="M160 112 V284"
       fill="none"
-      stroke="#b0b0b8"
+      stroke="#ffffff"
+      stroke-width="2"
+      marker-start="url(#arrow)"
+      marker-end="url(#arrow)"
+    />
+    <path
+      d="M548 112 V284"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="2"
+      marker-start="url(#arrow)"
+      marker-end="url(#arrow)"
+    />
+    <path
+      d="M700 68 H720 Q728 68 728 76 V476 Q728 484 720 484 H568 Q560 484 560 492 V512"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="2"
+      marker-end="url(#arrow)"
+    />
+    <path
+      d="M416 340 H372 Q364 340 364 348 V400 Q364 408 356 408 H188 Q180 408 180 400 V372"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="2"
       marker-end="url(#arrow)"
     />
     <rect
-      x="32"
-      y="76"
-      width="304"
+      x="20"
+      y="24"
+      width="280"
       height="88"
-      fill="#0a0a0a"
-      stroke="#727277"
+      rx="6"
+      fill="#141414"
+      stroke="#888888"
     />
+    <text x="40" y="60" font-size="22" font-weight="700">Skills + CLI</text>
+    <text x="40" y="88" font-size="17" fill="#d0d0d5">
+      Commands your agent calls
+    </text>
     <rect
-      x="384"
-      y="76"
-      width="304"
+      x="420"
+      y="24"
+      width="280"
       height="88"
-      fill="#0a0a0a"
-      stroke="#727277"
+      rx="6"
+      fill="#141414"
+      stroke="#888888"
     />
-    <text x="56" y="112" font-size="22">SKILLS + CLI</text>
-    <text x="56" y="140" font-size="16" fill="#d0d0d5">
-      Agent-invoked commands
+    <text x="440" y="60" font-size="22" font-weight="700">
+      Host adapter + runtime
     </text>
-    <text x="408" y="112" font-size="22">HOST + RUNTIME</text>
-    <text x="408" y="140" font-size="16" fill="#d0d0d5">
-      Checks and tool outcomes
+    <text x="440" y="88" font-size="17" fill="#d0d0d5">
+      Loaded in a supported agent
     </text>
-    <text x="200" y="208" font-size="14" fill="#d0d0d5">Search / save</text>
-    <text x="552" y="208" font-size="14" fill="#d0d0d5">Retrieve / learn</text>
+    <rect x="184" y="146" width="140" height="28" fill="#000000" />
+    <text x="188" y="166" font-size="16">Search / save</text>
+    <rect x="566" y="146" width="142" height="28" fill="#000000" />
+    <text x="572" y="166" font-size="16">Retrieve / learn</text>
     <rect
-      x="32"
-      y="244"
-      width="304"
-      height="112"
-      fill="#0a0a0a"
+      x="44"
+      y="284"
+      width="268"
+      height="88"
+      rx="4"
+      fill="#141414"
       stroke="#ffffff"
     />
-    <rect
-      x="384"
-      y="244"
-      width="304"
-      height="112"
-      fill="#0a0a0a"
-      stroke="#ffffff"
-    />
-    <text x="56" y="280" font-size="22">MARKDOWN MEMORY</text>
-    <text x="56" y="312" font-size="16" fill="#d0d0d5">
+    <text x="64" y="320" font-size="22" font-weight="700">Markdown memory</text>
+    <text x="64" y="348" font-size="17" fill="#d0d0d5">
       Signals + verified playbooks
     </text>
-    <text x="56" y="336" font-size="14" fill="#b0b0b8">~/.burr/memory/</text>
-    <text x="408" y="280" font-size="22">RUNTIME LESSONS</text>
-    <text x="408" y="312" font-size="16" fill="#d0d0d5">
+    <rect
+      x="416"
+      y="284"
+      width="260"
+      height="88"
+      rx="4"
+      fill="#141414"
+      stroke="#ffffff"
+    />
+    <text x="436" y="320" font-size="22" font-weight="700">
+      Runtime lessons
+    </text>
+    <text x="436" y="348" font-size="17" fill="#d0d0d5">
       Structured JSON knowledge
     </text>
-    <text x="408" y="336" font-size="14" fill="#b0b0b8">
-      ~/.burr/memory/knowledge/
+    <text x="392" y="414" font-size="16" fill="#d0d0d5">
+      Verified playbook export
     </text>
-    <text x="32" y="416" font-size="15" fill="#d0d0d5">
-      Verified runtime playbooks also
-    </text>
-    <text x="32" y="440" font-size="15" fill="#d0d0d5">
-      export to Markdown memory.
-    </text>
+    <text x="580" y="472" font-size="16" fill="#d0d0d5">Records outcomes</text>
     <rect
-      x="384"
-      y="412"
-      width="304"
-      height="80"
-      fill="#0a0a0a"
-      stroke="#3a3a3f"
+      x="420"
+      y="512"
+      width="280"
+      height="84"
+      rx="6"
+      fill="#141414"
+      stroke="#888888"
     />
-    <text x="408" y="444" font-size="20">LOCAL RUN HISTORY</text>
-    <text x="408" y="472" font-size="14" fill="#b0b0b8">~/.burr/runs/</text>
-    <line x1="32" y1="536" x2="688" y2="536" stroke="#3a3a3f" />
-    <text x="32" y="568" font-size="16">PROJECT .burr/</text>
-    <text x="32" y="596" font-size="15" fill="#d0d0d5">
-      Configuration, usage, and generated host copies. No cloud sync.
+    <text x="440" y="548" font-size="22" font-weight="700">
+      Local run history
+    </text>
+    <text x="440" y="576" font-size="17" fill="#d0d0d5">~/.burr/runs/</text>
+    <text x="20" y="548" font-size="20" font-weight="700">Project .burr/</text>
+    <text x="20" y="576" font-size="17" fill="#d0d0d5">
+      Configuration + usage
     </text>
   </g>
 </svg>

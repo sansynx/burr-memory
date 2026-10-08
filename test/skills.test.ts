@@ -88,4 +88,18 @@ describe("canonical package files", () => {
       expect(connector.end).toBeGreaterThan(connector.start);
     }
   });
+  it("gives each architecture connection its own arrowhead", async () => {
+    const svg = await readFile(
+      join(findPackageRoot(), "assets", "burr-architecture.svg"),
+      "utf8",
+    );
+    const arrows = [
+      ...svg.matchAll(/<path\b[^>]*marker-end="url\(#arrow\)"[^>]*>/g),
+    ];
+    expect(arrows.length).toBeGreaterThan(0);
+    for (const [path] of arrows) {
+      const d = path.match(/\bd="([^"]+)"/)?.[1] ?? "";
+      expect(d.match(/[Mm]/g)).toHaveLength(1);
+    }
+  });
 });
